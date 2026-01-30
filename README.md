@@ -1,8 +1,8 @@
-[English version](#lyra-assist)
+[English version](#lyra)
 
 ---
 
-# Лира Ассист
+# Лира
 
 Сайт: https://lyra-assist.com
 
@@ -116,7 +116,7 @@ Lyra Assist — развивающийся проект.
 
 ---
 
-# Lyra Assist
+# Lyra
 
 Website: https://lyra-assist.com
 
