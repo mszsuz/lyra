@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lyra</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: #0e1117;
+            color: #e6e6e6;
+            font-family: 'Inter', sans-serif;
+            font-size: 17px;
+            line-height: 1.8;
+            padding: 80px 24px;
+        }
+
+        .container {
+            max-width: 680px;
+            margin: 0 auto;
+        }
+
+        .lang-switch {
+            margin-bottom: 60px;
+        }
+
+        .lang-switch a {
+            color: #7c83ff;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .lang-switch a:hover {
+            text-decoration: underline;
+        }
+
+        .constellation {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 80px;
+        }
+
+        .constellation svg {
+            width: 120px;
+            height: 120px;
+            opacity: 0.6;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .tagline {
+            color: #888;
+            margin-bottom: 60px;
+        }
+
+        h2 {
+            font-size: 20px;
+            font-weight: 500;
+            margin-top: 80px;
+            margin-bottom: 24px;
+        }
+
+        p {
+            margin-bottom: 24px;
+        }
+
+        ul {
+            list-style: none;
+            margin-bottom: 24px;
+        }
+
+        ul li {
+            padding-left: 20px;
+            position: relative;
+            margin-bottom: 8px;
+        }
+
+        ul li::before {
+            content: "—";
+            position: absolute;
+            left: 0;
+            color: #555;
+        }
+
+        .role {
+            margin-bottom: 32px;
+        }
+
+        .role strong {
+            color: #fff;
+        }
+
+        .principles {
+            margin-top: 40px;
+            padding: 32px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+        }
+
+        .principles p {
+            margin-bottom: 12px;
+        }
+
+        .principles p:last-child {
+            margin-bottom: 0;
+        }
+
+        .status {
+            margin-top: 80px;
+            padding-top: 40px;
+            border-top: 1px solid #222;
+            color: #888;
+            font-size: 15px;
+        }
+
+        .links {
+            margin-top: 40px;
+        }
+
+        .links a {
+            color: #7c83ff;
+            text-decoration: none;
+            margin-right: 24px;
+        }
+
+        .links a:hover {
+            text-decoration: underline;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #222;
+            margin: 120px 0;
+        }
+
+        .section-en {
+            padding-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="lang-switch">
+            <a href="#english">English version</a>
+        </div>
+
+        <div class="constellation">
+            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Lyra constellation -->
+                <circle cx="50" cy="20" r="3" fill="#e6e6e6"/>
+                <circle cx="35" cy="45" r="2" fill="#e6e6e6"/>
+                <circle cx="65" cy="45" r="2" fill="#e6e6e6"/>
+                <circle cx="30" cy="75" r="2" fill="#e6e6e6"/>
+                <circle cx="50" cy="70" r="2" fill="#e6e6e6"/>
+                <circle cx="70" cy="75" r="2" fill="#e6e6e6"/>
+                <line x1="50" y1="20" x2="35" y2="45" stroke="#e6e6e6" stroke-width="0.5" opacity="0.4"/>
+                <line x1="50" y1="20" x2="65" y2="45" stroke="#e6e6e6" stroke-width="0.5" opacity="0.4"/>
+                <line x1="35" y1="45" x2="65" y2="45" stroke="#e6e6e6" stroke-width="0.5" opacity="0.4"/>
+                <line x1="35" y1="45" x2="30" y2="75" stroke="#e6e6e6" stroke-width="0.5" opacity="0.4"/>
+                <line x1="35" y1="45" x2="50" y2="70" stroke="#e6e6e6" stroke-width="0.5" opacity="0.4"/>
+                <line x1="65" y1="45" x2="50" y2="70" stroke="#e6e6e6" stroke-width="0.5" opacity="0.4"/>
+                <line x1="65" y1="45" x2="70" y2="75" stroke="#e6e6e6" stroke-width="0.5" opacity="0.4"/>
+                <line x1="30" y1="75" x2="50" y2="70" stroke="#e6e6e6" stroke-width="0.5" opacity="0.4"/>
+                <line x1="50" y1="70" x2="70" y2="75" stroke="#e6e6e6" stroke-width="0.5" opacity="0.4"/>
+            </svg>
+        </div>
+
+        <h1>Лира</h1>
+        <p class="tagline">ИИ-ассистент для понимания, ориентации и честного мышления</p>
+
+        <p>Лира — это ИИ-ассистент, созданный для работы со сложными системами, контекстом и знаниями. Она не заменяет мышление человека и не выдаёт готовые истины. Задача Лиры — помочь настроить понимание, увидеть связи и сохранить направление, когда информации становится слишком много.</p>
+
+        <p>Лира работает не через давление ответов, а через структуру и смысл. Она показывает, как элементы связаны между собой, где проходит граница знания и где остаётся пространство для решения человека.</p>
+
+        <h2>Образ и метафора</h2>
+
+        <p>С древности лира была инструментом гармонии. Она не создавала звук ради громкости — она настраивала его.</p>
+
+        <p>Созвездие Лиры с яркой звездой Вега служило ориентиром на небе. Небольшое и спокойное, оно помогало не потеряться в пространстве.</p>
+
+        <p>В литературе алетиометр показывал истину не прямыми словами, а через символы и контекст, требуя внимания и интерпретации.</p>
+
+        <p>Лира объединяет эти образы. Она не приказывает и не упрощает. Она помогает услышать смысл, сохранить направление и честно смотреть на сложность.</p>
+
+        <h2>Роль Лиры</h2>
+
+        <div class="role">
+            <p><strong>Инструмент гармонии</strong><br>Лира помогает привести хаос данных и мыслей в осмысленную форму.</p>
+        </div>
+
+        <div class="role">
+            <p><strong>Путеводная точка</strong><br>Лира не ведёт за руку, а подсвечивает направление в сложных системах и процессах.</p>
+        </div>
+
+        <div class="role">
+            <p><strong>Честный собеседник</strong><br>Лира показывает неопределённость и противоречия, не притворяясь всезнающей.</p>
+        </div>
+
+        <h2>Где используется Лира</h2>
+
+        <p>Лира создаётся как ассистент для работы с бизнес-системами, документацией, процессами и знаниями. Она может быть голосовым или текстовым помощником, встроенным в рабочие среды, системы автоматизации и инструменты поддержки принятия решений.</p>
+
+        <p>Лира особенно полезна там, где важны контекст, аккуратность и понимание, а не скорость или эффектность.</p>
+
+        <div class="principles">
+            <p>Лира не заменяет человека.</p>
+            <p>Лира не навязывает ответы.</p>
+            <p>Лира уважает неопределённость.</p>
+            <p>Лира помогает думать, а не соглашаться.</p>
+        </div>
+
+        <div class="status">
+            <p>Lyra — развивающийся проект. Его форма может меняться, но образ и принципы остаются неизменными.</p>
+            <div class="links">
+                <a href="https://github.com/mszsuz/lyra">GitHub</a>
+            </div>
+        </div>
+
+        <hr>
+
+        <div id="english" class="section-en">
+            <h1>Lyra</h1>
+            <p class="tagline">AI assistant for understanding, orientation, and honest thinking</p>
+
+            <p>Lyra is an AI assistant designed for working with complex systems, context, and knowledge. It does not replace human thinking or deliver ready-made truths. Lyra's purpose is to help tune understanding, reveal connections, and maintain direction when information becomes overwhelming.</p>
+
+            <p>Lyra works not through the pressure of answers, but through structure and meaning. It shows how elements connect, where the boundaries of knowledge lie, and where space remains for human decision.</p>
+
+            <h2>Image and Metaphor</h2>
+
+            <p>Since antiquity, the lyre was an instrument of harmony. It did not create sound for volume — it tuned it.</p>
+
+            <p>The constellation Lyra with its bright star Vega served as a point of orientation in the sky. Small and quiet, it helped not to get lost in space.</p>
+
+            <p>In literature, the alethiometer revealed truth not through direct words, but through symbols and context, requiring attention and interpretation.</p>
+
+            <p>Lyra unites these images. It does not command or simplify. It helps hear meaning, maintain direction, and look honestly at complexity.</p>
+
+            <h2>Lyra's Role</h2>
+
+            <div class="role">
+                <p><strong>Instrument of harmony</strong><br>Lyra helps bring chaos of data and thoughts into meaningful form.</p>
+            </div>
+
+            <div class="role">
+                <p><strong>Guiding point</strong><br>Lyra does not lead by the hand, but illuminates direction in complex systems and processes.</p>
+            </div>
+
+            <div class="role">
+                <p><strong>Honest companion</strong><br>Lyra shows uncertainty and contradictions without pretending to be all-knowing.</p>
+            </div>
+
+            <h2>Where Lyra Is Used</h2>
+
+            <p>Lyra is created as an assistant for working with business systems, documentation, processes, and knowledge. It can be a voice or text assistant, embedded into work environments, automation systems, and decision support tools.</p>
+
+            <p>Lyra is especially useful where context, care, and understanding matter more than speed or spectacle.</p>
+
+            <div class="principles">
+                <p>Lyra does not replace humans.</p>
+                <p>Lyra does not impose answers.</p>
+                <p>Lyra respects uncertainty.</p>
+                <p>Lyra helps think, not agree.</p>
+            </div>
+
+            <div class="status">
+                <p>Lyra is an evolving project. Its form may change, but its image and principles remain stable.</p>
+                <div class="links">
+                    <a href="https://github.com/mszsuz/lyra">GitHub</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
