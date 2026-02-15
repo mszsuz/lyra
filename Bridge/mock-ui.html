@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lyra Bridge — Mock UI</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1a1a2e;
+    --bg-panel: #16213e;
+    --bg-input: #0f3460;
+    --bg-msg-user: #1a4a7a;
+    --bg-msg-bot: #222b45;
+    --bg-msg-mcp: #2a1a3e;
+    --bg-msg-error: #3e1a1a;
+    --text: #e0e0e0;
+    --text-dim: #8899aa;
+    --accent: #53c5f0;
+    --accent-hover: #7dd5f5;
+    --border: #2a3a5e;
+    --green: #4caf50;
+    --red: #e74c3c;
+    --yellow: #f1c40f;
+  }
+
+  body {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header h1 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--red);
+  }
+
+  .status-dot.connected { background: var(--green); }
+  .status-dot.busy { background: var(--yellow); animation: pulse 1s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Messages area ── */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .msg {
+    padding: 8px 12px;
+    border-radius: 6px;
+    max-width: 85%;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    line-height: 1.5;
+    font-size: 13px;
+  }
+
+  .msg.user {
+    background: var(--bg-msg-user);
+    align-self: flex-end;
+    border-bottom-right-radius: 2px;
+  }
+
+  .msg.bot {
+    background: var(--bg-msg-bot);
+    align-self: flex-start;
+    border-bottom-left-radius: 2px;
+  }
+
+  .msg.streaming {
+    border-left: 2px solid var(--accent);
+  }
+
+  .msg.mcp {
+    background: var(--bg-msg-mcp);
+    align-self: flex-start;
+    font-size: 11px;
+    border-left: 2px solid #9b59b6;
+    max-width: 95%;
+  }
+
+  .msg.error {
+    background: var(--bg-msg-error);
+    align-self: flex-start;
+    border-left: 2px solid var(--red);
+  }
+
+  .msg.system {
+    align-self: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    background: transparent;
+    padding: 4px 0;
+  }
+
+  .msg-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Input area ── */
+  .input-area {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border);
+  }
+
+  .input-area input {
+    flex: 1;
+    background: var(--bg-input);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .input-area input:focus {
+    border-color: var(--accent);
+  }
+
+  .input-area input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .input-area button {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    min-width: 100px;
+  }
+
+  .input-area button:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+
+  .input-area button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 16px;
+    font-size: 10px;
+    color: var(--text-dim);
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border);
+  }
+
+  /* ── Settings panel ── */
+  .settings {
+    display: none;
+    padding: 12px 16px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+
+  .settings.open { display: flex; flex-wrap: wrap; }
+
+  .settings label {
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .settings input[type="text"],
+  .settings input[type="number"] {
+    background: var(--bg-input);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: inherit;
+    font-size: 12px;
+    width: 120px;
+    outline: none;
+  }
+
+  .settings button {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Lyra Bridge Mock UI</h1>
+  <div style="display: flex; align-items: center; gap: 16px;">
+    <button onclick="toggleSettings()" style="background:transparent;color:var(--text-dim);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Settings</button>
+    <div class="status-indicator">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Disconnected</span>
+    </div>
+  </div>
+</div>
+
+<div class="settings" id="settingsPanel">
+  <label>Port: <input type="number" id="portInput" value="3003"></label>
+  <label>JWT Secret: <input type="text" id="jwtInput" placeholder="(empty = no auth)"></label>
+  <button onclick="doConnect()">Connect</button>
+  <button onclick="doDisconnect()" style="background:var(--red);">Disconnect</button>
+</div>
+
+<div class="messages" id="messages"></div>
+
+<div class="input-area">
+  <input type="text" id="chatInput" placeholder="Type a message..." disabled
+    onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendMessage();}">
+  <button id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+</div>
+
+<div class="footer">
+  <span id="sessionInfo">Session: -</span>
+  <span id="costInfo">Cost: $0.0000</span>
+  <span id="msgCount">Messages: 0</span>
+</div>
+
+<script>
+// ─── State ──────────────────────────────────────────────────
+let ws = null;
+let sessionId = null;
+let busy = false;
+let messageCount = 0;
+let totalCostUsd = 0;
+let currentStreamMsg = null; // reference to the active streaming <div>
+
+// ─── DOM ────────────────────────────────────────────────────
+const messagesDiv = document.getElementById('messages');
+const chatInput = document.getElementById('chatInput');
+const sendBtn = document.getElementById('sendBtn');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const sessionInfo = document.getElementById('sessionInfo');
+const costInfo = document.getElementById('costInfo');
+const msgCount = document.getElementById('msgCount');
+const settingsPanel = document.getElementById('settingsPanel');
+const portInput = document.getElementById('portInput');
+const jwtInput = document.getElementById('jwtInput');
+
+// ─── Settings ───────────────────────────────────────────────
+function toggleSettings() {
+  settingsPanel.classList.toggle('open');
+}
+
+// ─── JWT (HS256, browser-compatible) ────────────────────────
+async function generateJwt(secret, user, role, expiresHours) {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    sub: user,
+    role: role,
+    iat: now,
+    exp: now + (expiresHours * 3600)
+  };
+
+  const enc = new TextEncoder();
+
+  function base64url(str) {
+    return btoa(str)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  }
+
+  const headerB64 = base64url(JSON.stringify(header));
+  const payloadB64 = base64url(JSON.stringify(payload));
+  const signatureInput = `${headerB64}.${payloadB64}`;
+
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(signatureInput));
+  const sigB64 = base64url(String.fromCharCode(...new Uint8Array(sig)));
+
+  return `${headerB64}.${payloadB64}.${sigB64}`;
+}
+
+// ─── UI helpers ─────────────────────────────────────────────
+function addMessage(text, type, label) {
+  const div = document.createElement('div');
+  div.className = `msg ${type}`;
+  if (label) {
+    const lbl = document.createElement('div');
+    lbl.className = 'msg-label';
+    lbl.textContent = label;
+    div.appendChild(lbl);
+  }
+  const content = document.createElement('span');
+  content.textContent = text;
+  div.appendChild(content);
+  messagesDiv.appendChild(div);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  return div;
+}
+
+function startStreamMessage() {
+  const div = document.createElement('div');
+  div.className = 'msg bot streaming';
+  const lbl = document.createElement('div');
+  lbl.className = 'msg-label';
+  lbl.textContent = 'Lyra';
+  div.appendChild(lbl);
+  const content = document.createElement('span');
+  content.className = 'stream-content';
+  div.appendChild(content);
+  messagesDiv.appendChild(div);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  currentStreamMsg = div;
+  return div;
+}
+
+function appendStreamText(text) {
+  if (!currentStreamMsg) {
+    startStreamMessage();
+  }
+  const content = currentStreamMsg.querySelector('.stream-content');
+  if (content) {
+    content.textContent += text;
+  }
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function endStreamMessage() {
+  if (currentStreamMsg) {
+    currentStreamMsg.classList.remove('streaming');
+    currentStreamMsg = null;
+  }
+}
+
+function updateStatus(state) {
+  statusDot.className = 'status-dot';
+  if (state === 'connected') {
+    statusDot.classList.add('connected');
+    statusText.textContent = 'Connected';
+    chatInput.disabled = false;
+    sendBtn.disabled = false;
+  } else if (state === 'busy') {
+    statusDot.classList.add('busy');
+    statusText.textContent = 'Processing...';
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+  } else {
+    statusText.textContent = 'Disconnected';
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+  }
+}
+
+function updateFooter() {
+  sessionInfo.textContent = `Session: ${sessionId ? sessionId.slice(0, 8) + '...' : '-'}`;
+  costInfo.textContent = `Cost: $${totalCostUsd.toFixed(4)}`;
+  msgCount.textContent = `Messages: ${messageCount}`;
+}
+
+// ─── WebSocket ──────────────────────────────────────────────
+async function doConnect() {
+  if (ws) {
+    ws.close();
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  const port = portInput.value || 3003;
+  const jwtSecret = jwtInput.value || null;
+  let url = `ws://localhost:${port}/`;
+
+  if (jwtSecret) {
+    const token = await generateJwt(jwtSecret, 'MockUI-User', 'user', 24);
+    url += `?token=${token}`;
+  }
+
+  addMessage(`Connecting to ws://localhost:${port}/...`, 'system');
+
+  try {
+    ws = new WebSocket(url);
+  } catch (e) {
+    addMessage(`Connection error: ${e.message}`, 'error', 'ERROR');
+    return;
+  }
+
+  ws.onopen = () => {
+    addMessage('WebSocket connected', 'system');
+  };
+
+  ws.onclose = (ev) => {
+    updateStatus('disconnected');
+    endStreamMessage();
+    if (ev.code === 4001) {
+      addMessage('Authentication failed (4001)', 'error', 'AUTH');
+    } else {
+      addMessage(`Disconnected (code ${ev.code})`, 'system');
+    }
+    ws = null;
+  };
+
+  ws.onerror = () => {
+    addMessage('WebSocket error', 'error', 'ERROR');
+  };
+
+  ws.onmessage = (ev) => {
+    handleMessage(ev.data);
+  };
+}
+
+function doDisconnect() {
+  if (ws) {
+    ws.close();
+  }
+}
+
+function handleMessage(raw) {
+  let msg;
+  try {
+    msg = JSON.parse(raw);
+  } catch {
+    return;
+  }
+
+  switch (msg.type) {
+    case 'session':
+      sessionId = msg.sessionId;
+      updateStatus('connected');
+      updateFooter();
+      // Auto-send hello
+      wsSend({
+        type: 'hello',
+        config: '1C:Mock UI',
+        version: '3.0.0',
+        processingVersion: '8.3.27',
+        userName: 'UI-Test-User',
+        userRole: 'user',
+        baseId: crypto.randomUUID()
+      });
+      break;
+
+    case 'hello_ack':
+      addMessage('Session established', 'system');
+      busy = true;
+      updateStatus('busy');
+      startStreamMessage(); // prepare for greeting stream
+      break;
+
+    case 'stream_event': {
+      const event = msg.event;
+      if (event && event.type === 'content_block_delta' && event.delta) {
+        const text = event.delta.text || '';
+        if (text) {
+          appendStreamText(text);
+        }
+      }
+      break;
+    }
+
+    case 'result':
+      endStreamMessage();
+      busy = false;
+      updateStatus('connected');
+      messageCount++;
+      if (msg.costUsd !== undefined) {
+        totalCostUsd += msg.costUsd;
+      }
+      updateFooter();
+      break;
+
+    case 'error':
+      endStreamMessage();
+      if (msg.reason === 'busy') {
+        addMessage(`Busy: ${msg.message || 'Processing previous request'}`, 'error', 'BUSY');
+      } else {
+        addMessage(`Error: ${msg.message || msg.reason}`, 'error', 'ERROR');
+        busy = false;
+        updateStatus('connected');
+      }
+      break;
+
+    case 'mcp_request': {
+      // Show MCP request in UI
+      const detail = `Tool: ${msg.tool}\nParams: ${JSON.stringify(msg.params, null, 2)}`;
+      addMessage(detail, 'mcp', `MCP REQUEST (${msg.requestId?.slice(0, 8)}...)`);
+
+      // Auto-respond with emulated data
+      const result = emulateMcpTool(msg.tool, msg.params || {});
+      const response = {
+        type: 'mcp_response',
+        requestId: msg.requestId,
+        result: result
+      };
+      wsSend(response);
+
+      // Show response in UI
+      const resDetail = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+      addMessage(resDetail, 'mcp', `MCP RESPONSE (${msg.requestId?.slice(0, 8)}...)`);
+      break;
+    }
+
+    default:
+      addMessage(`Unknown: ${JSON.stringify(msg).slice(0, 200)}`, 'system');
+  }
+}
+
+function sendMessage() {
+  const text = chatInput.value.trim();
+  if (!text || !ws || busy) return;
+
+  addMessage(text, 'user', 'You');
+  wsSend({ type: 'chat', content: text });
+  chatInput.value = '';
+  busy = true;
+  updateStatus('busy');
+  startStreamMessage();
+}
+
+function wsSend(data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(data));
+  }
+}
+
+// ─── MCP emulation (browser-side) ───────────────────────────
+function emulateMcpTool(tool, params) {
+  switch (tool) {
+    case '1c_eval': {
+      const expr = (params.expression || '').toLowerCase();
+      if (expr.includes('текущаядата') || expr.includes('currentdate')) {
+        return new Date().toLocaleString('ru-RU');
+      }
+      if (expr.includes('имяпользователя') || expr.includes('username')) {
+        return 'UI-Test-User';
+      }
+      return `Result: ${params.expression}`;
+    }
+
+    case '1c_query': {
+      const query = (params.query || '').toUpperCase();
+      if (query.includes('НОМЕНКЛАТУРА') || query.includes('NOMENCLATURE')) {
+        return {
+          columns: ['Code', 'Name', 'Article'],
+          rows: [
+            ['000001', 'Laptop ASUS', 'NB-001'],
+            ['000002', 'Mouse Logitech', 'MS-001']
+          ]
+        };
+      }
+      if (query.includes('КОНТРАГЕНТ')) {
+        return {
+          columns: ['Code', 'Name', 'INN'],
+          rows: [['000001', 'OOO Test', '7700000001']]
+        };
+      }
+      return { columns: ['Result'], rows: [['Empty result']] };
+    }
+
+    case '1c_metadata': {
+      return {
+        Catalogs: ['Nomenclature', 'Counterparties'],
+        Documents: ['SalesOrder', 'PurchaseOrder']
+      };
+    }
+
+    case '1c_exec':
+      return 'Code executed successfully';
+
+    default:
+      return { error: `Unknown tool: ${tool}` };
+  }
+}
+
+// ─── Auto-connect on load ───────────────────────────────────
+window.addEventListener('load', () => {
+  chatInput.focus();
+  // Auto-connect if default port
+  doConnect();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+оэтому ниже — **не просто ещё 100 случайных вариантов**, а **100 “взрослых” названий**, отфильтрованных по всем тем ограничениям, которые уже всплыли в диалоге:
+
+**Что я учитывал при генерации:**
+- без обязательной привязки к `.ai`
+- без `-help`
+- без слишком «маркетинговых» клише
+- без явного UI‑слоя (hi-, my-) как *единственного* имени
+- чтобы работало для:  
+  – 1С / ERP  
+  – GitHub  
+  – статей  
+  – возможного глобального роста  
+- чтобы **объясняло роль**, а не просто «AI»
+
+⚠️ Это **список для проверки**, а не рекомендация брать всё подряд.
+
+---
+
+# ✅ 100 наилучших вариантов для проверки (Lyra / Лира)
+
+## A. Роль / партнёрство (самые устойчивые)
+
+1. lyra-assist ✅ (якорь)
+2. lyra-advisor
+3. lyra-guide
+4. lyra-companion
+5. lyra-copilot
+6. lyra-partner
+7. lyra-ally
+8. lyra-coach
+9. lyra-navigator
+10. lyra-consultant
+
+---
+
+## B. Интеллект / понимание (не «help»)
+
+11. lyra-insight
+12. lyra-reason
+13. lyra-logic
+14. lyra-context
+15. lyra-clarity
+16. lyra-knowledge
+17. lyra-intellect
+18. lyra-mind
+19. lyra-think
+20. lyra-understand
+
+---
+
+## C. Управление / контроль (B2B, ERP)
+
+21. lyra-ops
+22. lyra-control
+23. lyra-manage
+24. lyra-admin
+25. lyra-direct
+26. lyra-orchestrator
+27. lyra-coordinator
+28. lyra-command
+29. lyra-supervisor
+30. lyra-operator
+
+---
+
+## D. Архитектура / платформа (как продукт, не UI)
+
+31. lyra-core
+32. lyra-engine
+33. lyra-system
+34. lyra-platform
+35. lyra-suite
+36. lyra-stack
+37. lyra-hub
+38. lyra-service
+39. lyra-foundation
+40. lyra-framework
+
+---
+
+## E. Общение и интерфейс (но не «привет»)
+
+41. lyra-dialog
+42. lyra-converse
+43. lyra-talk
+44. lyra-speak
+45. lyra-voice
+46. lyra-interface
+47. lyra-channel
+48. lyra-console
+49. lyra-shell
+50. lyra-portal
+
+---
+
+## F. Навигация / путь / метафора
+
+51. lyra-guideway
+52. lyra-path
+53. lyra-route
+54. lyra-compass
+55. lyra-orbit
+56. lyra-north
+57. lyra-vector
+58. lyra-direction
+59. lyra-map
+60. lyra-pilot
+
+---
+
+## G. Короткие, «брендовые» (не описательные)
+
+61. lyra-one
+62. lyra-pro
+63. lyra-plus
+64. lyra-next
+65. lyra-prime
+66. lyra-x
+67. lyra-neo
+68. lyra-flow
+69. lyra-zen
+70. lyra-echo
+
+---
+
+## H. Бизнес‑ориентированные, но не узкие
+
+71. lyra-work
+72. lyra-office
+73. lyra-business
+74. lyra-process
+75. lyra-workflow
+76. lyra-ops-ai
+77. lyra-enterprise
+78. lyra-corp
+79. lyra-suite-ai
+80. lyra-system-ai
+
+---
+
+## I. Осторожные составные (защитные)
+
+81. lyra-assist-core
+82. lyra-assist-system
+83. lyra-assist-platform
+84. lyra-assist-pro
+85. lyra-advisor-ai
+86. lyra-guide-ai
+87. lyra-companion-ai
+88. lyra-copilot-ai
+89. lyra-ops-assist
+90. lyra-admin-assist
+
+---
+
+## J. Латинизированные / гибридные (редкие, но чистые)
+
+91. lyra-nova
+92. lyra-orion
+93. lyra-aurora
+94. lyra-atlas
+95. lyra-axiom
+96. lyra-logos
+97. lyra-sapient
+98. lyra-intel
+99. lyra-sense
+100. lyra-ethos
+
+---
+
+# 🧠 Как с этим работать (важно)
+
+1. **Сначала GitHub**  
+   → отсечёт 60–70%
+
+2. Потом `.com`  
+   → останется 10–20
+
+3. Потом произношение / бренд‑ощущение  
+   → останется 3–5
+
+---
