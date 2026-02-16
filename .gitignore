@@ -2,3 +2,15 @@ node_modules/
 .vs/
 .env
 *.log
+
+# 1С базы данных и временные файлы
+tempdb/
+*.1CD
+*.1CD.*
+*.cfl
+*.lgf
+*.lgp
+*.epf
+
+# Бинарные файлы
+*.exe

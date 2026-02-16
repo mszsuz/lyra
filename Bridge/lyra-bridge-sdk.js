@@ -12,7 +12,7 @@
  * - MCP tools for 1C created in-process via createSdkMcpServer
  * - Streaming: StreamEvent -> WebSocket -> 1C
  *
- * Usage:  node bridge-sdk.js [--port 3003]
+ * Usage:  node lyra-bridge-sdk.js [--port 3003]
  */
 
 const WebSocket = require('ws');

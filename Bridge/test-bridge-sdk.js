@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Test for bridge-sdk.js
+ * Test for lyra-bridge-sdk.js
  *
  * Tests:
  * 1. WebSocket connection
@@ -13,11 +13,11 @@
  * 6. MCP request/response (if 1C connected)
  *
  * Usage:
- *   1. Start bridge:  node bridge-sdk.js --port 3003
- *   2. Run tests:     node test-bridge-sdk.js [--port 3003]
+ *   1. Start bridge:  node lyra-bridge-sdk.js --port 3003
+ *   2. Run tests:     node test-lyra-bridge-sdk.js [--port 3003]
  *
  * Or auto-start bridge:
- *   node test-bridge-sdk.js --auto
+ *   node test-lyra-bridge-sdk.js --auto
  */
 
 const WebSocket = require('ws');
@@ -437,8 +437,8 @@ async function main() {
 
   // Auto-start bridge if requested
   if (AUTO_START) {
-    console.log('Starting bridge-sdk.js...');
-    bridgeProcess = spawn('node', [path.join(__dirname, 'bridge-sdk.js'), '--port', String(PORT)], {
+    console.log('Starting lyra-bridge-sdk.js...');
+    bridgeProcess = spawn('node', [path.join(__dirname, 'lyra-bridge-sdk.js'), '--port', String(PORT)], {
       stdio: ['ignore', 'pipe', 'pipe']
     });
     bridgeProcess.stdout.on('data', d => process.stdout.write(`  [bridge] ${d}`));

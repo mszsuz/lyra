@@ -4,7 +4,7 @@
 /**
  * Lyra Bridge SDK — Load Test
  *
- * Launches N parallel WebSocket connections to bridge-sdk.js,
+ * Launches N parallel WebSocket connections to lyra-bridge-sdk.js,
  * measures first-response latency, checks busy rejection behavior,
  * and outputs a summary table via console.table.
  *

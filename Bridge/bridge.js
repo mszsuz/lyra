@@ -206,8 +206,13 @@ function spawnClaude(s) {
 
   s.log(`spawn claude`);
 
+  // Убираем CLAUDECODE из окружения, чтобы вложенный Claude не отказался запускаться
+  const env = { ...process.env };
+  delete env.CLAUDECODE;
+
   const cp = spawn('claude', claudeArgs, {
-    stdio: ['pipe', 'pipe', 'pipe']
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env
   });
   s.claude = cp;
   s.log(`claude pid=${cp.pid}`);

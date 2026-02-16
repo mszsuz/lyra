@@ -5,7 +5,7 @@
  * Emulator 1C Client for Lyra Bridge SDK v3
  *
  * Emulates the behavior of EXT_Chat (1C WebSocket client):
- * - Connects to bridge-sdk.js via WebSocket
+ * - Connects to lyra-bridge-sdk.js via WebSocket
  * - Sends hello (session initialization)
  * - Sends chat messages (user_message)
  * - Receives stream_event and result

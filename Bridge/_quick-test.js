@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 
-// Quick integration test for bridge-sdk.js
-// Run bridge first: node bridge-sdk.js --port 3098
+// Quick integration test for lyra-bridge-sdk.js
+// Run bridge first: node lyra-bridge-sdk.js --port 3098
 // Then run: node _quick-test.js --port 3098
 
 const WebSocket = require('ws');

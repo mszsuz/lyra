@@ -2,9 +2,9 @@
   "name": "1c-claude-bridge",
   "version": "3.0.0",
   "description": "WebSocket bridge: 1С ↔ Lyra (Agent SDK)",
-  "main": "bridge-sdk.js",
+  "main": "lyra-bridge-sdk.js",
   "scripts": {
-    "start": "node bridge-sdk.js",
+    "start": "node lyra-bridge-sdk.js",
     "start:legacy": "node bridge.js",
     "test": "node test-bridge-sdk.js",
     "test:full": "node test-bridge-sdk.js --full",

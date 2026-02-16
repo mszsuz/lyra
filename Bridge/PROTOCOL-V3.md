@@ -2,7 +2,7 @@
 
 **Дата:** 2026-02-13
 **Версия протокола:** 3.0
-**Bridge:** bridge-sdk.js (Agent SDK edition)
+**Bridge:** lyra-bridge-sdk.js (Agent SDK edition)
 
 ---
 
@@ -10,7 +10,7 @@
 
 ### Что изменилось
 
-| Компонент | v2 (bridge.js) | v3 (bridge-sdk.js) |
+| Компонент | v2 (bridge.js) | v3 (lyra-bridge-sdk.js) |
 |-----------|----------------|-------------------|
 | **AI backend** | `spawn('claude')` + stdio | Agent SDK (`@anthropic-ai/claude-agent-sdk`) |
 | **Архитектура** | 1 процесс Claude на сессию | 1 долгоживущая сессия Haiku на пользователя + Sonnet для анализа |
@@ -541,14 +541,14 @@ URL = "ws://localhost:3003?session=" + СохранённыйSessionId;
 
 ## 11. Различия протокола v2 vs v3 (таблица)
 
-| Аспект | v2 (bridge.js) | v3 (bridge-sdk.js) |
+| Аспект | v2 (bridge.js) | v3 (lyra-bridge-sdk.js) |
 |--------|----------------|-------------------|
 | **Инициализация** | Автоматическая | Требуется `hello` от 1С |
 | **Приветствие** | Нет | Автоматическое после `hello_ack` |
 | **Системные события** | `{"type":"system","subtype":"init",...}` | Отсутствуют (скрыты внутри bridge) |
 | **Дельты текста** | `stream_event.event.delta.type = "text_delta"` | `stream_event.event.delta.text` (упрощён) |
 | **Финальный ответ** | `{"type":"result","result":"..."}` | `{"type":"result","result":"...","usage":{...},"costUsd":...}` (расширен) |
-| **MCP процесс** | Отдельный (`bridge.js --mcp`) | In-process (встроен в bridge-sdk.js) |
+| **MCP процесс** | Отдельный (`bridge.js --mcp`) | In-process (встроен в lyra-bridge-sdk.js) |
 | **Busy rejection** | Не было | `{"type":"error","reason":"busy"}` |
 | **Agent errors** | Через stderr (не структурировано) | `{"type":"error","reason":"agent_error"}` |
 | **Статистика токенов** | Не было | `usage` в `result` (по моделям) |
