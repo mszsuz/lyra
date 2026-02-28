@@ -80,12 +80,21 @@ Content может быть строкой или массивом блоков 
 - `{"type":"mcp_request","requestId":"uuid","tool":"1c_eval","params":{...}}` — запрос инструмента
 - `{"type":"claude_exit","code":0}` — Claude завершился
 
-**1С → Bridge:**
+**1С → Bridge (заголовки при подключении):**
+- *(без заголовков)* — новая сессия, случайный UUID
+- `claude-session-id: <uuid>` — новая сессия с заданным ID (`--session-id`)
+- `claude-resume: <uuid>` — возобновление существующей сессии Claude (`--resume`), bridge автоматически ищет папку проекта в `~/.claude/projects/`
+
+**1С → Bridge (сообщения):**
 - `{"type":"chat","content":"текст"}` — сообщение пользователя
 - `{"type":"mcp_response","requestId":"uuid","result":"..."}` — ответ на инструмент
 - `{"type":"mcp_response","requestId":"uuid","error":"..."}` — ошибка инструмента
 
-## MCP-инструменты
+## MCP-серверы
+
+### 1c (stdio, через bridge)
+
+Инструменты для работы с базой 1С. Bridge выступает адаптером: Claude говорит по MCP/JSON-RPC, 1С работает с простыми JSON (mcp_request/mcp_response).
 
 | tool | params | Описание |
 |---|---|---|
@@ -93,6 +102,13 @@ Content может быть строкой или массивом блоков 
 | `1c_eval` | `{expression}` | Вычислить выражение (Строка(ТекущаяДата())) |
 | `1c_metadata` | `{path?}` | Дерево метаданных конфигурации |
 | `1c_exec` | `{code}` | Выполнить блок кода 1С |
+
+### vega (HTTP)
+
+MCP-сервер Vega, подключается напрямую по HTTP (не через bridge).
+
+- URL: `http://localhost:60040/mcp`
+- Заголовок: `X-API-Key: vega`
 
 ## Запуск Claude из bridge (ключевые флаги)
 
@@ -104,20 +120,24 @@ const claudeArgs = [
   '--include-partial-messages',
   '--verbose',
   '--disable-slash-commands',
-  '--session-id', sessionId,
-  '--mcp-config', mcpConfigJson,
+  // --resume <id> для возобновления, --session-id <id> для новой сессии
+  s.resume && projectDir ? '--resume' : '--session-id', s.id,
+  '--mcp-config', mcpConfig,
   '--system-prompt', systemPrompt,
-  '--allowedTools', 'mcp__1c__1c_query', 'mcp__1c__1c_eval',
-    'mcp__1c__1c_metadata', 'mcp__1c__1c_exec', 'ToolSearch',
   '--strict-mcp-config',
   '--settings', JSON.stringify({ disableAllHooks: true }),
 ];
+// При resume — cwd в папку проекта, найденную по session ID
+spawn('claude', claudeArgs, { cwd: projectDir || undefined, ... });
 ```
 
 **Критичные флаги:**
-- `--allowedTools` — без него Claude блокирует MCP-инструменты в -p режиме. `ToolSearch` обязателен — Claude через него обнаруживает deferred MCP-инструменты
+- `--resume` vs `--session-id` — `--resume` загружает историю существующей сессии, `--session-id` создаёт новую с заданным ID
+- `--allowedTools` — убран, инструменты не ограничиваются (ранее без него Claude блокировал MCP в -p режиме, сейчас работает без ограничений)
 - `--strict-mcp-config` — загружать только наш MCP, не тянуть всё из .mcp.json (ускоряет старт)
 - `--settings '{"disableAllHooks":true}'` — отключить хуки (ускоряет старт)
+
+**Resume-логика:** при заголовке `claude-resume`, bridge ищет файл `<sessionId>.jsonl` в `~/.claude/projects/*/`, декодирует имя папки проекта обратно в путь и запускает Claude с `--resume` и `cwd` в эту папку.
 
 ## Результаты тестирования (12/12 passed)
 

@@ -6,6 +6,7 @@ const { spawn } = require('child_process');
 const { randomUUID } = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 // ─── Аргументы командной строки ─────────────────────────────
 const args = process.argv.slice(2);
@@ -18,7 +19,7 @@ if (isMcpMode) {
     process.stderr.write('--session <id> required in MCP mode\n');
     process.exit(1);
   }
-  runMcpMode(sessionId);
+  runMcpRelay(sessionId);
 } else {
   runMainMode();
 }
@@ -44,13 +45,16 @@ function runMainMode() {
 
   wss.on('connection', (ws, req) => {
     const p = new URL(req.url, 'http://x').searchParams;
-    const type = p.get('type');     // 'mcp' или null (=1С)
-    const sid  = p.get('session');  // session ID (для mcp и reconnect)
+    const type   = p.get('type');                      // 'mcp' или null (=1С)
+    const sid    = p.get('session');                    // session ID (для mcp)
+    const resume = req.headers['claude-resume'];       // resume существующей сессии Claude
+    const newSid = req.headers['claude-session-id'];   // новая сессия с заданным ID
+    const model  = req.headers['claude-model'];         // модель (sonnet, opus, haiku)
 
     if (type === 'mcp' && sid) {
       onMcpConnect(ws, sid, sessions);
     } else {
-      on1cConnect(ws, sid, sessions, logDir);
+      on1cConnect(ws, resume || newSid || null, !!resume, model, sessions, logDir);
     }
   });
 
@@ -71,12 +75,12 @@ function shutdown(sessions, wss) {
 
 // ─── 1С подключается ────────────────────────────────────────
 
-function on1cConnect(ws, resumeId, sessions, logDir) {
-  const sid = resumeId || randomUUID();
+function on1cConnect(ws, sid, isResume, model, sessions, logDir) {
+  sid = sid || randomUUID();
   let s = sessions.get(sid);
 
   if (s) {
-    // Переподключение к существующей сессии
+    // Переподключение к существующей сессии bridge
     s.ws1c = ws;
     s.log('1С reconnected');
   } else {
@@ -87,6 +91,8 @@ function on1cConnect(ws, resumeId, sessions, logDir) {
       ws1c: ws,
       wsMcp: null,
       claude: null,
+      resume: isResume,
+      model: model || null,
       log(msg) {
         const line = `[${ts()}] ${msg}`;
         console.log(line);
@@ -94,7 +100,7 @@ function on1cConnect(ws, resumeId, sessions, logDir) {
       }
     };
     sessions.set(sid, s);
-    s.log('new session');
+    s.log(isResume ? 'resume session' : 'new session');
   }
 
   // Отправляем 1С её session ID
@@ -114,9 +120,9 @@ function on1cConnect(ws, resumeId, sessions, logDir) {
           type: 'user',
           message: { role: 'user', content: msg.content }
         });
-      } else if (msg.type === 'mcp_response') {
-        // Ответ на MCP-запрос → MCP-клиент
-        if (s.wsMcp) wsSend(s.wsMcp, msg);
+      } else if (msg.type === 'mcp_jsonrpc') {
+        // JSON-RPC ответ 1С → MCP relay → stdout → Claude
+        if (s.wsMcp) wsSend(s.wsMcp, msg.data, true);
       }
     } catch (e) {
       s.log(`1С parse error: ${e.message}`);
@@ -145,16 +151,12 @@ function onMcpConnect(ws, sid, sessions) {
   s.log('MCP client connected');
 
   ws.on('message', (raw) => {
-    try {
-      const msg = JSON.parse(raw);
-      s.log(`MCP → ${String(raw).slice(0, 300)}`);
+    const line = String(raw);
+    s.log(`MCP → ${line.slice(0, 300)}`);
 
-      // MCP-запрос инструмента → пересылаем 1С
-      if (msg.type === 'mcp_request' && s.ws1c) {
-        wsSend(s.ws1c, msg);
-      }
-    } catch (e) {
-      s.log(`MCP parse error: ${e.message}`);
+    // Оборачиваем JSON-RPC в конверт и пересылаем 1С
+    if (s.ws1c) {
+      wsSend(s.ws1c, { type: 'mcp_jsonrpc', data: line });
     }
   });
 
@@ -162,6 +164,65 @@ function onMcpConnect(ws, sid, sessions) {
     s.log('MCP client disconnected');
     s.wsMcp = null;
   });
+}
+
+
+// ─── Поиск папки проекта по session ID ──────────────────────
+
+function findProjectDir(sessionId) {
+  const projectsDir = path.join(os.homedir(), '.claude', 'projects');
+  if (!fs.existsSync(projectsDir)) return null;
+
+  for (const dir of fs.readdirSync(projectsDir)) {
+    const sessionFile = path.join(projectsDir, dir, `${sessionId}.jsonl`);
+    if (fs.existsSync(sessionFile)) {
+      // C--WORKS-2026-01-31-Lyra-Bridge → C:\WORKS\2026-01-31 Lyra\Bridge
+      const projectPath = dir.replace(/^([A-Z])-/, '$1:').replace(/-/g, path.sep);
+      // Проверяем что папка существует — берём с учётом что дефисы могли быть пробелами
+      if (fs.existsSync(projectPath)) return projectPath;
+      // Пробуем с пробелами вместо разделителей (Claude кодирует пробелы как -)
+      // Перебираем варианты восстановления пути
+      const parts = dir.split('-');
+      // Первая часть — диск (C)
+      const drive = parts[0] + ':';
+      const rest = parts.slice(1).join('-');
+      // Ищем реальную папку по частичному совпадению
+      const candidate = findRealPath(drive, rest);
+      if (candidate) return candidate;
+    }
+  }
+  return null;
+}
+
+function findRealPath(drive, encodedRest) {
+  // encoded dir = "C--WORKS-2026-01-31-Lyra-Bridge" → drive="C:", rest="-WORKS-..."
+  // Убираем ведущие дефисы (от двойного -- после буквы диска)
+  const clean = encodedRest.replace(/^-+/, '');
+  return matchPath(drive + path.sep, clean);
+}
+
+function matchPath(base, remaining) {
+  if (!remaining) return fs.existsSync(base) ? base : null;
+  if (!fs.existsSync(base)) return null;
+
+  let entries;
+  try { entries = fs.readdirSync(base); } catch { return null; }
+
+  for (const entry of entries) {
+    // Кодируем имя записи так же, как Claude: спецсимволы → дефис
+    const encoded = entry.replace(/[^a-zA-Z0-9._-]/g, '-');
+    if (remaining.startsWith(encoded)) {
+      const rest = remaining.slice(encoded.length);
+      if (rest === '') {
+        return path.join(base, entry);
+      }
+      if (rest.startsWith('-')) {
+        const result = matchPath(path.join(base, entry), rest.slice(1));
+        if (result) return result;
+      }
+    }
+  }
+  return null;
 }
 
 
@@ -178,6 +239,11 @@ function spawnClaude(s) {
           '--mcp', '--session', s.id,
           '--port', String(PORT)
         ]
+      },
+      'vega': {
+        type: 'http',
+        url: 'http://localhost:60040/mcp',
+        headers: { 'X-API-Key': 'vega' }
       }
     }
   });
@@ -188,6 +254,14 @@ function spawnClaude(s) {
     'Язык запросов 1С это НЕ SQL (ВЫБРАТЬ, ИЗ, ГДЕ, а не SELECT FROM WHERE). ' +
     'Даты в запросах: ДАТАВРЕМЯ(2025,1,1). Отвечай на русском.';
 
+  // Для resume — ищем папку проекта по session ID
+  let projectDir = null;
+  if (s.resume) {
+    projectDir = findProjectDir(s.id);
+    if (projectDir) s.log(`resume: project dir: ${projectDir}`);
+    else s.log(`resume: project dir not found for ${s.id}, starting new`);
+  }
+
   const claudeArgs = [
     '-p',
     '--output-format', 'stream-json',
@@ -195,11 +269,13 @@ function spawnClaude(s) {
     '--include-partial-messages',
     '--verbose',
     '--disable-slash-commands',
-    '--session-id', s.id,
+    s.resume && projectDir ? '--resume' : '--session-id', s.id,
+    ...(s.model ? ['--model', s.model] : []),
     '--mcp-config', mcpConfig,
     '--system-prompt', systemPrompt,
     '--allowedTools', 'mcp__1c__1c_query', 'mcp__1c__1c_eval',
-      'mcp__1c__1c_metadata', 'mcp__1c__1c_exec', 'ToolSearch',
+      'mcp__1c__1c_metadata', 'mcp__1c__1c_exec',
+      'mcp__vega__*', 'ToolSearch',
     '--strict-mcp-config',
     '--settings', JSON.stringify({ disableAllHooks: true }),
   ];
@@ -212,7 +288,8 @@ function spawnClaude(s) {
 
   const cp = spawn('claude', claudeArgs, {
     stdio: ['pipe', 'pipe', 'pipe'],
-    env
+    env,
+    cwd: projectDir || undefined
   });
   s.claude = cp;
   s.log(`claude pid=${cp.pid}`);
@@ -264,122 +341,33 @@ function ts() {
 
 
 // ═════════════════════════════════════════════════════════════
-//  MCP РЕЖИМ
-//  stdio MCP-сервер (для Claude) ↔ WebSocket-клиент (к bridge)
+//  MCP РЕЖИМ (relay)
+//  stdin ↔ WebSocket relay (для Claude)
 //  Запускается как: node bridge.js --mcp --session <id>
+//  JSON-RPC обрабатывается в 1С, bridge только пересылает
 // ═════════════════════════════════════════════════════════════
 
-async function runMcpMode(sessionId) {
-  const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
-  const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
-  const {
-    ListToolsRequestSchema,
-    CallToolRequestSchema
-  } = require('@modelcontextprotocol/sdk/types.js');
+function runMcpRelay(sessionId) {
+  const ws = new WebSocket(`ws://localhost:${PORT}/?type=mcp&session=${sessionId}`);
 
-  // Подключаемся к основному bridge через WebSocket
-  const ws = new WebSocket(
-    `ws://localhost:${PORT}/?type=mcp&session=${sessionId}`
-  );
-
-  const pending = new Map();  // requestId → { resolve, reject, timer }
-
-  await new Promise((ok, fail) => {
-    ws.on('open', ok);
-    ws.on('error', fail);
-  });
-
-  // Ответы от 1С приходят через bridge
-  ws.on('message', (raw) => {
-    try {
-      const msg = JSON.parse(raw);
-      if (msg.type === 'mcp_response' && pending.has(msg.requestId)) {
-        const p = pending.get(msg.requestId);
-        pending.delete(msg.requestId);
-        clearTimeout(p.timer);
-        msg.error ? p.reject(new Error(msg.error)) : p.resolve(msg.result);
+  ws.on('open', () => {
+    // stdin → WebSocket (построчно)
+    let buf = '';
+    process.stdin.on('data', chunk => {
+      buf += chunk;
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (line.trim()) ws.send(line);
       }
-    } catch (e) { /* ignore */ }
-  });
-
-  // Вызов инструмента 1С через bridge → WebSocket → 1С
-  function call1c(tool, params) {
-    return new Promise((resolve, reject) => {
-      const requestId = randomUUID();
-      const timer = setTimeout(() => {
-        pending.delete(requestId);
-        reject(new Error('Таймаут запроса к 1С (30с)'));
-      }, 30000);
-      pending.set(requestId, { resolve, reject, timer });
-      ws.send(JSON.stringify({ type: 'mcp_request', requestId, tool, params }));
     });
-  }
-
-  // ─── MCP-сервер ─────────────────────────────────────────
-
-  const server = new Server(
-    { name: '1c-bridge', version: '2.0.0' },
-    { capabilities: { tools: {} } }
-  );
-
-  // Список инструментов
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
-      mcpTool('1c_query',
-        'Выполнить запрос на языке запросов 1С (ВЫБРАТЬ ... ИЗ ...). Это НЕ SQL!',
-        { query:  { type: 'string', description: 'Текст запроса 1С' },
-          params: { type: 'object', description: 'Параметры запроса (необязательно)' } },
-        ['query']),
-
-      mcpTool('1c_eval',
-        'Вычислить выражение 1С. Только выражения, НЕ процедуры. Пример: Строка(ТекущаяДата())',
-        { expression: { type: 'string', description: 'Выражение на языке 1С' } },
-        ['expression']),
-
-      mcpTool('1c_metadata',
-        'Получить дерево/ветку метаданных конфигурации 1С',
-        { path: { type: 'string', description: 'Путь в дереве метаданных (пусто = корень)' } },
-        []),
-
-      mcpTool('1c_exec',
-        'Выполнить блок кода на языке 1С (процедуры, циклы, условия, присваивания)',
-        { code: { type: 'string', description: 'Код на встроенном языке 1С' } },
-        ['code']),
-    ]
-  }));
-
-  // Вызов инструмента
-  server.setRequestHandler(CallToolRequestSchema, async (req) => {
-    const { name, arguments: params } = req.params;
-    try {
-      const result = await call1c(name, params);
-      return {
-        content: [{
-          type: 'text',
-          text: typeof result === 'string' ? result : JSON.stringify(result, null, 2)
-        }]
-      };
-    } catch (e) {
-      return {
-        content: [{ type: 'text', text: `Ошибка: ${e.message}` }],
-        isError: true
-      };
-    }
   });
 
-  // Запуск на stdio
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-}
+  // WebSocket → stdout
+  ws.on('message', raw => {
+    process.stdout.write(String(raw) + '\n');
+  });
 
-function mcpTool(name, description, properties, required) {
-  return {
-    name,
-    description,
-    inputSchema: {
-      type: 'object',
-      properties,
-      ...(required.length ? { required } : {})
-    }
-  };
+  ws.on('close', () => process.exit(0));
+  ws.on('error', () => process.exit(1));
 }
