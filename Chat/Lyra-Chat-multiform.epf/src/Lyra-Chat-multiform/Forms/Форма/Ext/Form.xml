@@ -32,7 +32,7 @@
 					<v8:content>Страницы формы</v8:content>
 				</v8:item>
 			</ToolTip>
-			<PagesRepresentation>TabsOnBottom</PagesRepresentation>
+			<PagesRepresentation>None</PagesRepresentation>
 			<ExtendedTooltip name="СтраницыФормыРасширеннаяПодсказка" id="129"/>
 			<ChildItems>
 				<Page name="СтраницаЧат" id="130">
@@ -254,40 +254,41 @@
 										</HTMLDocumentField>
 									</ChildItems>
 								</UsualGroup>
-								<UsualGroup name="ГруппаНижняяПанельГоризонтальная" id="116">
+								<UsualGroup name="ГруппаНижняяПанельВертикальная" id="116">
 									<Title>
 										<v8:item>
 											<v8:lang>ru</v8:lang>
-											<v8:content>Группа нижняя панель горизонтальная</v8:content>
+											<v8:content>Группа нижняя панель вертикальная</v8:content>
 										</v8:item>
 									</Title>
 									<ToolTip>
 										<v8:item>
 											<v8:lang>ru</v8:lang>
-											<v8:content>Группа нижняя панель горизонтальная</v8:content>
+											<v8:content>Группа нижняя панель вертикальная</v8:content>
 										</v8:item>
 									</ToolTip>
+									<Group>Vertical</Group>
 									<Representation>None</Representation>
 									<ShowTitle>false</ShowTitle>
-									<ExtendedTooltip name="ГруппаНижняяПанельГоризонтальнаяРасширеннаяПодсказка" id="117"/>
+									<ExtendedTooltip name="ГруппаНижняяПанельВертикальнаяРасширеннаяПодсказка" id="117"/>
 									<ChildItems>
-										<UsualGroup name="ГруппаСообщение" id="118">
+										<UsualGroup name="ГруппаТекстСообщения" id="118">
 											<Title>
 												<v8:item>
 													<v8:lang>ru</v8:lang>
-													<v8:content>Группа сообщение</v8:content>
+													<v8:content>Группа текст сообщения</v8:content>
 												</v8:item>
 											</Title>
 											<ToolTip>
 												<v8:item>
 													<v8:lang>ru</v8:lang>
-													<v8:content>Группа сообщение</v8:content>
+													<v8:content>Группа текст сообщения</v8:content>
 												</v8:item>
 											</ToolTip>
 											<Group>Vertical</Group>
 											<Representation>None</Representation>
 											<ShowTitle>false</ShowTitle>
-											<ExtendedTooltip name="ГруппаСообщениеРасширеннаяПодсказка" id="119"/>
+											<ExtendedTooltip name="ГруппаТекстСообщенияРасширеннаяПодсказка" id="119"/>
 											<ChildItems>
 												<InputField name="ТекстСообщения" id="55">
 													<DataPath>Чат1_ТекстСообщенияПользователя</DataPath>
@@ -298,6 +299,26 @@
 													<ContextMenu name="ТекстСообщенияКонтекстноеМеню" id="56"/>
 													<ExtendedTooltip name="ТекстСообщенияРасширеннаяПодсказка" id="57"/>
 												</InputField>
+											</ChildItems>
+										</UsualGroup>
+										<UsualGroup name="ГруппаКнопки" id="122">
+											<Title>
+												<v8:item>
+													<v8:lang>ru</v8:lang>
+													<v8:content>Группа кнопки</v8:content>
+												</v8:item>
+											</Title>
+											<ToolTip>
+												<v8:item>
+													<v8:lang>ru</v8:lang>
+													<v8:content>Группа кнопки</v8:content>
+												</v8:item>
+											</ToolTip>
+											<Group>AlwaysHorizontal</Group>
+											<Representation>None</Representation>
+											<ShowTitle>false</ShowTitle>
+											<ExtendedTooltip name="ГруппаКнопкиРасширеннаяПодсказка" id="123"/>
+											<ChildItems>
 												<Button name="КомандаОтправитьСообщение" id="58">
 													<Type>UsualButton</Type>
 													<DefaultButton>true</DefaultButton>
@@ -305,61 +326,26 @@
 													<ButtonImportance>Main</ButtonImportance>
 													<ExtendedTooltip name="КомандаОтправитьСообщениеРасширеннаяПодсказка" id="59"/>
 												</Button>
+												<LabelDecoration name="Декорация1" id="163">
+													<AutoMaxWidth>false</AutoMaxWidth>
+													<HorizontalStretch>true</HorizontalStretch>
+													<ContextMenu name="Декорация1КонтекстноеМеню" id="164"/>
+													<ExtendedTooltip name="Декорация1РасширеннаяПодсказка" id="165"/>
+												</LabelDecoration>
+												<LabelField name="Версия" id="124">
+													<DataPath>Версия</DataPath>
+													<Width>10</Width>
+													<HorizontalStretch>false</HorizontalStretch>
+													<ContextMenu name="ВерсияКонтекстноеМеню" id="125"/>
+													<ExtendedTooltip name="ВерсияРасширеннаяПодсказка" id="126"/>
+												</LabelField>
 											</ChildItems>
 										</UsualGroup>
-										<UsualGroup name="ГруппаРазмышление" id="120">
-											<Title>
-												<v8:item>
-													<v8:lang>ru</v8:lang>
-													<v8:content>Группа размышление</v8:content>
-												</v8:item>
-											</Title>
-											<ToolTip>
-												<v8:item>
-													<v8:lang>ru</v8:lang>
-													<v8:content>Группа размышление</v8:content>
-												</v8:item>
-											</ToolTip>
+										<UsualGroup name="Группа1" id="161">
 											<Representation>None</Representation>
 											<ShowTitle>false</ShowTitle>
-											<ExtendedTooltip name="ГруппаРазмышлениеРасширеннаяПодсказка" id="121"/>
-											<ChildItems>
-												<InputField name="ТекущееСообщениеТекст" id="96">
-													<DataPath>ТекущееСообщениеТекст</DataPath>
-													<ReadOnly>true</ReadOnly>
-													<TitleLocation>None</TitleLocation>
-													<AutoMaxWidth>false</AutoMaxWidth>
-													<MultiLine>true</MultiLine>
-													<ExtendedEditMultipleValues>true</ExtendedEditMultipleValues>
-													<ContextMenu name="ТекущееСообщениеТекстКонтекстноеМеню" id="97"/>
-													<ExtendedTooltip name="ТекущееСообщениеТекстРасширеннаяПодсказка" id="98"/>
-												</InputField>
-											</ChildItems>
+											<ExtendedTooltip name="Группа1РасширеннаяПодсказка" id="162"/>
 										</UsualGroup>
-									</ChildItems>
-								</UsualGroup>
-								<UsualGroup name="ГруппаИнформация" id="122">
-									<Title>
-										<v8:item>
-											<v8:lang>ru</v8:lang>
-											<v8:content>Группа информация</v8:content>
-										</v8:item>
-									</Title>
-									<ToolTip>
-										<v8:item>
-											<v8:lang>ru</v8:lang>
-											<v8:content>Группа информация</v8:content>
-										</v8:item>
-									</ToolTip>
-									<Representation>None</Representation>
-									<ShowTitle>false</ShowTitle>
-									<ExtendedTooltip name="ГруппаИнформацияРасширеннаяПодсказка" id="123"/>
-									<ChildItems>
-										<LabelField name="Версия" id="124">
-											<DataPath>Версия</DataPath>
-											<ContextMenu name="ВерсияКонтекстноеМеню" id="125"/>
-											<ExtendedTooltip name="ВерсияРасширеннаяПодсказка" id="126"/>
-										</LabelField>
 									</ChildItems>
 								</UsualGroup>
 							</ChildItems>
