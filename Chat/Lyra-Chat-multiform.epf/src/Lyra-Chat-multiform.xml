@@ -19,7 +19,7 @@
 					<v8:content>Лира: Чат (модульный)</v8:content>
 				</v8:item>
 			</Synonym>
-			<Comment>26.03.01.1</Comment>
+			<Comment>26.03.02.7</Comment>
 			<DefaultForm>ExternalDataProcessor.Lyra_Chat_multiform.Form.Форма</DefaultForm>
 			<AuxiliaryForm/>
 		</Properties>
@@ -29,7 +29,7 @@
 			<Form>МодульПарсер</Form>
 			<Form>МодульMCP</Form>
 			<Form>ФормаПодключение</Form>
-			<Template>ДвоичныеДанныеПриложения</Template>
+			<Form>МодульОбщий</Form>
 			<Template>ЕХТ_Чат_ДвоичныеДанныеПриложения</Template>
 		</ChildObjects>
 	</ExternalDataProcessor>
