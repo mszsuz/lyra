@@ -106,15 +106,22 @@ function on1cConnect(ws, sid, isResume, model, sessions, logDir) {
   // Отправляем 1С её session ID
   wsSend(ws, { type: 'session', sessionId: sid });
 
-  // Запускаем Claude если ещё не запущен
-  if (!s.claude) spawnClaude(s);
+  // Claude запускается только после получения hello от 1С
 
   ws.on('message', (raw) => {
     try {
       const msg = JSON.parse(raw);
       s.log(`1С → ${String(raw).slice(0, 500)}`);
 
-      if (msg.type === 'chat') {
+      if (msg.type === 'hello') {
+        // 1С передаёт свои инструменты и внешние MCP-серверы
+        s.tools = msg.tools || [];
+        s.mcpServers = msg.mcpServers || {};
+        s.systemPrompt = msg.systemPrompt || null;
+        s.log(`hello: tools=[${s.tools.join(',')}] mcpServers=[${Object.keys(s.mcpServers).join(',')}]`);
+        wsSend(ws, { type: 'hello_ack' });
+        if (!s.claude) spawnClaude(s);
+      } else if (msg.type === 'chat') {
         // Сообщение пользователя → Claude stdin
         writeToClaudeStdin(s, {
           type: 'user',
@@ -229,30 +236,41 @@ function matchPath(base, remaining) {
 // ─── Запуск Claude Code ─────────────────────────────────────
 
 function spawnClaude(s) {
-  // MCP-конфиг: Claude запустит bridge.js --mcp как свой MCP-сервер
-  const mcpConfig = JSON.stringify({
-    mcpServers: {
-      '1c': {
-        command: 'node',
-        args: [
-          path.resolve(__dirname, 'bridge.js'),
-          '--mcp', '--session', s.id,
-          '--port', String(PORT)
-        ]
-      },
-      'vega': {
-        type: 'http',
-        url: 'http://localhost:60040/mcp',
-        headers: { 'X-API-Key': 'vega' }
-      }
+  // MCP-конфиг: 1c relay + внешние серверы из hello
+  const mcpServers = {
+    '1c': {
+      command: 'node',
+      args: [
+        path.resolve(__dirname, 'bridge.js'),
+        '--mcp', '--session', s.id,
+        '--port', String(PORT)
+      ]
     }
-  });
+  };
 
-  const systemPrompt =
+  // Внешние MCP-серверы от 1С (vega и др.)
+  const externalServers = s.mcpServers || {};
+  for (const [name, config] of Object.entries(externalServers)) {
+    mcpServers[name] = config;
+  }
+
+  const mcpConfig = JSON.stringify({ mcpServers });
+
+  // Инструменты: 1С-инструменты с префиксом + внешние серверы wildcard + ToolSearch
+  const tools = s.tools || [];
+  const allowedTools = [
+    ...tools.map(t => `mcp__1c__${t}`),
+    ...Object.keys(externalServers).map(name => `mcp__${name}__*`),
+    'ToolSearch'
+  ];
+
+  const defaultPrompt =
     'Ты AI-помощник, подключённый к базе 1С:Предприятие. ' +
-    'Используй MCP-инструменты 1c_query, 1c_eval, 1c_metadata, 1c_exec для работы с базой. ' +
+    'Используй MCP-инструменты для работы с базой. ' +
     'Язык запросов 1С это НЕ SQL (ВЫБРАТЬ, ИЗ, ГДЕ, а не SELECT FROM WHERE). ' +
     'Даты в запросах: ДАТАВРЕМЯ(2025,1,1). Отвечай на русском.';
+
+  const systemPrompt = s.systemPrompt || defaultPrompt;
 
   // Для resume — ищем папку проекта по session ID
   let projectDir = null;
@@ -273,9 +291,7 @@ function spawnClaude(s) {
     ...(s.model ? ['--model', s.model] : []),
     '--mcp-config', mcpConfig,
     '--system-prompt', systemPrompt,
-    '--allowedTools', 'mcp__1c__1c_query', 'mcp__1c__1c_eval',
-      'mcp__1c__1c_metadata', 'mcp__1c__1c_exec',
-      'mcp__vega__*', 'ToolSearch',
+    '--allowedTools', ...allowedTools,
     '--strict-mcp-config',
     '--settings', JSON.stringify({ disableAllHooks: true }),
   ];
@@ -364,8 +380,10 @@ function runMcpRelay(sessionId) {
   });
 
   // WebSocket → stdout
+  // 1С возвращает pretty-printed JSON (с \r\n) — компактируем до одной строки (NDJSON)
   ws.on('message', raw => {
-    process.stdout.write(String(raw) + '\n');
+    const compact = String(raw).replace(/\r?\n/g, '');
+    process.stdout.write(compact + '\n');
   });
 
   ws.on('close', () => process.exit(0));
