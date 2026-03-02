@@ -77,7 +77,7 @@ Content может быть строкой или массивом блоков 
 **Bridge → 1С:**
 - `{"type":"session","sessionId":"uuid"}` — при подключении
 - raw NDJSON от Claude (стриминг, результаты, системные события)
-- `{"type":"mcp_request","requestId":"uuid","tool":"1c_eval","params":{...}}` — запрос инструмента
+- `{"type":"mcp_request","requestId":"uuid","tool":"v8_eval","params":{...}}` — запрос инструмента
 - `{"type":"claude_exit","code":0}` — Claude завершился
 
 **1С → Bridge (заголовки при подключении):**
@@ -98,10 +98,10 @@ Content может быть строкой или массивом блоков 
 
 | tool | params | Описание |
 |---|---|---|
-| `1c_query` | `{query, params?}` | Запрос на языке 1С (ВЫБРАТЬ...ИЗ..., НЕ SQL!) |
-| `1c_eval` | `{expression}` | Вычислить выражение (Строка(ТекущаяДата())) |
-| `1c_metadata` | `{path?}` | Дерево метаданных конфигурации |
-| `1c_exec` | `{code}` | Выполнить блок кода 1С |
+| `v8_query` | `{query, params?}` | Запрос на языке 1С (ВЫБРАТЬ...ИЗ..., НЕ SQL!) |
+| `v8_eval` | `{expression}` | Вычислить выражение (Строка(ТекущаяДата())) |
+| `v8_metadata` | `{path?}` | Дерево метаданных конфигурации |
+| `v8_exec` | `{code}` | Выполнить блок кода 1С |
 
 ### vega (HTTP)
 
@@ -146,7 +146,7 @@ spawn('claude', claudeArgs, { cwd: projectDir || undefined, ... });
 | Session ID получен | ✅ |
 | Стриминг дельт текста | ✅ |
 | Result получен | ✅ |
-| MCP: Claude вызвал 1c_eval | ✅ |
+| MCP: Claude вызвал v8_eval | ✅ |
 | MCP: Claude использовал данные от 1С | ✅ |
 | Переподключение: session сохранился | ✅ |
 | Переподключение: Claude ответил | ✅ |
