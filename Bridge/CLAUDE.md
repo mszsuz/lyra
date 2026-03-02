@@ -107,7 +107,7 @@ Content может быть строкой или массивом блоков 
 
 MCP-сервер Vega, подключается напрямую по HTTP (не через bridge).
 
-- URL: `http://localhost:60040/mcp`
+- URL: `http://localhost:60010/mcp`
 - Заголовок: `X-API-Key: vega`
 
 ## Запуск Claude из bridge (ключевые флаги)

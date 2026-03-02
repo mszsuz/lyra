@@ -266,13 +266,7 @@ function spawnClaude(s) {
 
   const mcpConfig = JSON.stringify({ mcpServers });
 
-  // Инструменты: 1С-инструменты с префиксом + внешние серверы wildcard + ToolSearch
-  const tools = s.tools || [];
-  const allowedTools = [
-    ...tools.map(t => `mcp__1c__${t}`),
-    ...Object.keys(externalServers).map(name => `mcp__${name}__*`),
-    'ToolSearch'
-  ];
+  // Все инструменты разрешены (pipe-режим, нет терминала для подтверждений)
 
   const defaultPrompt =
     'Ты AI-помощник, подключённый к базе 1С:Предприятие. ' +
@@ -301,8 +295,7 @@ function spawnClaude(s) {
     ...(s.model ? ['--model', s.model] : []),
     '--mcp-config', mcpConfig,
     '--system-prompt', systemPrompt,
-    '--allowedTools', ...allowedTools,
-    '--strict-mcp-config',
+    '--dangerously-skip-permissions',
     '--settings', JSON.stringify({ disableAllHooks: true }),
   ];
 
