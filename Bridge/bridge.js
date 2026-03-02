@@ -93,6 +93,8 @@ function on1cConnect(ws, sid, isResume, model, sessions, logDir) {
       claude: null,
       resume: isResume,
       model: model || null,
+      streaming: false,
+      pendingMessage: null,
       log(msg) {
         const line = `[${ts()}] ${msg}`;
         console.log(line);
@@ -122,11 +124,19 @@ function on1cConnect(ws, sid, isResume, model, sessions, logDir) {
         wsSend(ws, { type: 'hello_ack' });
         if (!s.claude) spawnClaude(s);
       } else if (msg.type === 'chat') {
-        // Сообщение пользователя → Claude stdin
-        writeToClaudeStdin(s, {
-          type: 'user',
-          message: { role: 'user', content: msg.content }
-        });
+        if (s.streaming) {
+          // Прерываем текущий стрим: SIGINT + ставим сообщение в очередь
+          s.pendingMessage = msg.content;
+          s.log('interrupting stream, sending SIGINT');
+          if (s.claude) s.claude.kill('SIGINT');
+        } else {
+          // Обычная отправка
+          s.streaming = true;
+          writeToClaudeStdin(s, {
+            type: 'user',
+            message: { role: 'user', content: msg.content }
+          });
+        }
       } else if (msg.type === 'mcp_jsonrpc') {
         // JSON-RPC ответ 1С → MCP relay → stdout → Claude
         if (s.wsMcp) wsSend(s.wsMcp, msg.data, true);
@@ -321,6 +331,24 @@ function spawnClaude(s) {
       if (!line) continue;
       s.log(`claude → ${line.slice(0, 300)}`);
       if (s.ws1c) wsSend(s.ws1c, line, true);   // raw JSON string
+
+      // Отслеживаем конец стрима для отправки отложенного сообщения
+      try {
+        const ev = JSON.parse(line);
+        if (ev.type === 'result') {
+          s.streaming = false;
+          if (s.pendingMessage) {
+            const content = s.pendingMessage;
+            s.pendingMessage = null;
+            s.log(`sending pending message: ${content.slice(0, 100)}`);
+            s.streaming = true;
+            writeToClaudeStdin(s, {
+              type: 'user',
+              message: { role: 'user', content: content }
+            });
+          }
+        }
+      } catch (_) { /* не JSON — пропускаем */ }
     }
   });
 
@@ -332,7 +360,26 @@ function spawnClaude(s) {
   cp.on('exit', (code) => {
     s.log(`claude exit code=${code}`);
     s.claude = null;
-    if (s.ws1c) wsSend(s.ws1c, { type: 'claude_exit', code });
+    s.streaming = false;
+
+    if (s.pendingMessage) {
+      // SIGINT убил процесс (Windows) — перезапускаем с --resume
+      const content = s.pendingMessage;
+      s.pendingMessage = null;
+      s.log(`respawning claude for pending message: ${content.slice(0, 100)}`);
+      s.resume = true;  // следующий spawn будет с --resume
+      spawnClaude(s);
+      // Отправляем отложенное сообщение после небольшой задержки (ждём готовности stdin)
+      setTimeout(() => {
+        s.streaming = true;
+        writeToClaudeStdin(s, {
+          type: 'user',
+          message: { role: 'user', content: content }
+        });
+      }, 500);
+    } else {
+      if (s.ws1c) wsSend(s.ws1c, { type: 'claude_exit', code });
+    }
   });
 }
 
