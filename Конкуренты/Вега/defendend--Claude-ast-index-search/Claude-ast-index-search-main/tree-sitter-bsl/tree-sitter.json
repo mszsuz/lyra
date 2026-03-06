@@ -1,0 +1,14 @@
+{
+  "metadata": {
+    "version": "0.1.0",
+    "links": {}
+  },
+  "grammars": [
+    {
+      "name": "bsl",
+      "path": ".",
+      "scope": "source.bsl",
+      "file-types": ["bsl", "os"]
+    }
+  ]
+}

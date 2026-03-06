@@ -1,0 +1,21 @@
+      52 +## Инструменты (tools), доступные в сессии
+      53 +
+      54 +| Инструмент | Описание |
+      55 +|-----------|----------|
+      56 +| Task | Запуск субагентов (Bash, Explore, Plan, general-purpose и др.) |
+      57 +| Bash | Выполнение bash-команд |
+      58 +| Glob | Поиск файлов по паттерну |
+      59 +| Grep | Поиск по содержимому файлов (ripgrep) |
+      60 +| Read | Чтение файлов |
+      61 +| Edit | Редактирование файлов (точная замена строк) |
+      62 +| Write | Запись файлов |
+      63 +| WebFetch | Загрузка веб-страниц |
+      64 +| WebSearch | Поиск в интернете |
+      65 +| TaskCreate / TaskUpdate / TaskGet / TaskList | Управление задачами |
+      66 +| TeamCreate / TeamDelete / SendMessage | Управление командами агентов |
+      67 +| EnterPlanMode / ExitPlanMode | Режим планирования |
+      68 +| EnterWorktree | Git worktree |
+      69 +| AskUserQuestion | Вопросы пользователю |
+      70 +| NotebookEdit | Редактирование Jupyter notebooks |
+      71 +| Skill | Запуск пользовательских skills |
+      72 +| TaskOutput / TaskStop | Управление фоновыми задачами |

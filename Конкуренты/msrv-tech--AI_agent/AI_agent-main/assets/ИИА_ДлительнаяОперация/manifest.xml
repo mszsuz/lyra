@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Picture>
+	<PictureVariant name="85.gif" screenDensity="bldpi"/>
+	<PictureVariant name="100.gif" screenDensity="ldpi"/>
+	<PictureVariant name="125.gif" screenDensity="aldpi"/>
+	<PictureVariant name="150.gif" screenDensity="mdpi"/>
+	<PictureVariant name="175.gif" screenDensity="amdpi"/>
+	<PictureVariant name="200.gif" screenDensity="hdpi"/>
+	<PictureVariant name="300.gif" screenDensity="xdpi"/>
+	<PictureVariant name="400.gif" screenDensity="udpi"/>
+	<PictureVariant name="Picture.gif" screenDensity="ldpi" interfaceVariant="version8_2"/>
+	<PictureVariant name="Picture.gif" screenDensity="ldpi" interfaceVariant="version8_2_OrdinaryApp"/>
+	<PictureVariant name="Picture.svg" screenDensity="ldpi" interfaceVariant="version8_5" theme="" isTemplate="false"/>
+</Picture>

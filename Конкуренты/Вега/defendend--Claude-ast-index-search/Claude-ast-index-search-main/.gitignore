@@ -1,0 +1,7 @@
+/target
+.claude/
+dist/
+mobile-tools/
+.mcp.json
+.catalyst/
+.glm-cli/
