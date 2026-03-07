@@ -60,7 +60,28 @@
       "Bash(gh repo create:*)",
       "Bash(gh repo view:*)",
       "Bash(git remote add:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(./centrifugo.exe genconfig)",
+      "Bash(cp \"Router/docs/Centrifugo introduction  Centrifugo.md\" \"centrifugo/docs/\")",
+      "Bash(cp \"Router/docs/Frequently Asked Questions  Centrifugo.md\" \"centrifugo/docs/\")",
+      "Bash(cp \"Router/docs/Centrifugo v6 + FastAPI + Python разрабатываем веб-опросник с обновлениями в реальном времени  Хабр.md\" \"centrifugo/docs/\")",
+      "WebFetch(domain:centrifugal.dev)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :11000)",
+      "Bash(findstr LISTENING)",
+      "Bash(./centrifugo.exe --config=config.json)",
+      "Bash(./centrifugo.exe --help)",
+      "Bash(./centrifugo.exe gentoken --user test-client-1)",
+      "Bash(node test-flow.js)",
+      "Bash(node test-flow.mjs)",
+      "Bash(node test-two-clients.mjs)",
+      "Bash(./centrifugo.exe gentoken --user router-1)",
+      "Bash(node test-client-id.mjs)",
+      "Bash(./centrifugo.exe gentoken --user shared-lobby-user)",
+      "Bash(node test-no-subscribe-lobby.mjs)",
+      "Bash(node test-full-flow.mjs)",
+      "Bash(node -e \":*)",
+      "Bash(node --input-type=module -e \":*)"
     ]
   }
 }
