@@ -15,16 +15,16 @@
 		<Event name="OnCreateAtServer">ПриСозданииНаСервере</Event>
 	</Events>
 	<ChildItems>
-		<InputField name="АдресBridge" id="1">
-			<DataPath>АдресBridge</DataPath>
+		<InputField name="АдресЦентрифуга" id="1">
+			<DataPath>АдресЦентрифуга</DataPath>
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
-					<v8:content>URL Bridge</v8:content>
+					<v8:content>URL Centrifugo</v8:content>
 				</v8:item>
 			</Title>
-			<ContextMenu name="АдресBridgeКонтекстноеМеню" id="2"/>
-			<ExtendedTooltip name="АдресBridgeРасширеннаяПодсказка" id="3"/>
+			<ContextMenu name="АдресЦентрифугаКонтекстноеМеню" id="2"/>
+			<ExtendedTooltip name="АдресЦентрифугаРасширеннаяПодсказка" id="3"/>
 		</InputField>
 		<InputField name="Модель" id="4">
 			<DataPath>Модель</DataPath>
@@ -112,11 +112,11 @@
 			</Type>
 			<MainAttribute>true</MainAttribute>
 		</Attribute>
-		<Attribute name="АдресBridge" id="2">
+		<Attribute name="АдресЦентрифуга" id="2">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
-					<v8:content>URL Bridge</v8:content>
+					<v8:content>URL Centrifugo</v8:content>
 				</v8:item>
 			</Title>
 			<Type>
