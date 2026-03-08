@@ -23,7 +23,7 @@
 | Модуль | Назначение |
 |--------|-----------|
 | **Форма** (контроллер) | Главная форма: стриминг, ЕХТ_Чат, диспетчер событий от модулей |
-| **МодульBridge** | WebSocket-соединение с транспортом (сейчас Bridge, целевой — мини-клиент Centrifugo на BSL) |
+| **МодульBridge** | Мини-клиент Centrifugo на BSL: connect/JWT, publish, ping/pong, мульти-JSON, push-конверт, hello/hello_ack/переподключение |
 | **МодульПарсер** | JSON через ЧтениеJSON (stateless) |
 | **МодульMCP** | Strategy-dispatch, серверные обработчики exec-команд |
 | **ФормаПодключение** | UI настроек (URL, модель, системный промпт) |
@@ -44,17 +44,11 @@
    → МодульBridge.Publish (JSON-ответ обратно)
 ```
 
-## Транспорт: текущий и целевой
+## Транспорт: Centrifugo (реализовано)
 
-### Текущий: Bridge (прототип)
+МодульBridge — мини-клиент Centrifugo на BSL (~400 строк): connect с JWT, publish, ping/pong, разбор мульти-JSON (`\n`), разворачивание push-конверта. Реализация клиентского протокола Centrifugo непосредственно в коде BSL, используя `WebSocketКлиентСоединения`. Без внешних компонент или SDK. Subscribe на lobby не нужен (`allow_publish_for_client: true`), subscribe на канал сессии не нужен (авто-подписка через `channels` claim в JWT).
 
-МодульBridge подключается к Bridge (Node.js) по WebSocket на `ws://localhost:3003`. Отправляет и получает сырой JSON. Протокол: `session`, `chat`, `stream_event`, `result`, `error`, `mcp_request`, `mcp_response`.
-
-Сейчас: WebSocket к Bridge (ws://localhost:3003), 174 строки.
-
-### Целевой: Centrifugo
-
-МодульBridge будет адаптирован в мини-клиент Centrifugo на BSL (~300 строк): connect с JWT, publish, ping/pong, разбор мульти-JSON (\n), разворачивание push-конверта. Реализация клиентского протокола Centrifugo непосредственно в коде BSL, используя `WebSocketКлиентСоединения`. Без внешних компонент или SDK. Subscribe на lobby не нужен (`allow_publish_for_client: true`), subscribe на канал сессии не нужен (авто-подписка через `channels` claim в JWT).
+Общий JWT для lobby зашит в обработку. При hello Роутер возвращает персональный chat_jwt — Чат переподключается с ним.
 
 **Два канала:**
 
@@ -117,7 +111,7 @@ MCP-инструменты: `v8_query` (запрос), `v8_metadata` (метад
 
 - Платформа 1С:Предприятие 8.3.27+ (язык BSL, встроенный WebSocket-клиент)
 - HTML/JS чат-виджет (фреймворк ЕХТ_Чат от 1ext.com)
-- Centrifugo (целевой транспорт) / Bridge (текущий прототип)
+- Centrifugo (транспорт, мини-клиент на BSL)
 
 ## Распространение
 
@@ -136,12 +130,12 @@ build-epf.bat "Lyra-Chat-multiform.epf/src" "Lyra-Chat-multiform.epf/Lyra-Chat-m
 
 - `Lyra-Chat-multiform.epf/src/` — исходники (XML + BSL)
 - `Форма/Module.bsl` — главная форма (контроллер, стриминг, ЕХТ_Чат)
-- `МодульBridge/Module.bsl` — WebSocket-соединение (174 строки, целевой ~300 строк)
+- `МодульBridge/Module.bsl` — мини-клиент Centrifugo (~400 строк)
 - `МодульПарсер/Module.bsl` — JSON через ЧтениеJSON (279 строк, stateless)
 - `МодульMCP/Module.bsl` — MCP strategy-dispatch (537 строк)
 - `ARCHITECTURE.md` — архитектура и паттерны
 - `BACKLOG.md` — бэклог задач
 
-## Папка "! Удалить"
+## Bridge (устаревшее)
 
-Содержит устаревшие версии и эксперименты. Можно удалить когда не нужны для справки.
+Bridge (Node.js, ws://localhost:3003) — прототип, заменён Centrifugo-транспортом. Сохранён в подпроекте `Bridge/` как референс.

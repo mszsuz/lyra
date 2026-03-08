@@ -8,13 +8,15 @@
 
 ## Текущий статус
 
-**Работает MVP (через Bridge-прототип):**
+**Centrifugo-транспорт работает end-to-end (подтверждено test-router-flow.mjs):**
 
 ```
-1С (Lyra-Chat.epf) → WebSocket → bridge.js → Claude Code CLI → MCP tools → ответ в 1С
+1С (Lyra-Chat.epf) → Centrifugo → ЕХТ_Лира_Роутер (1С) → Claude
 ```
 
-Bridge — временный прототип (Node.js). Все его функции переходят к Роутеру (расширение 1С + Centrifugo).
+Полный флоу: hello → hello_ack (JWT, session_id) → переподключение с chat_jwt → мобильное с mobile_jwt → auth → auth_ack + balance_update.
+
+Bridge (Node.js) — устаревший прототип, сохранён как референс.
 
 ## Целевая архитектура
 
@@ -85,8 +87,8 @@ Centrifugo v6.6.2 — сервер реального времени (WebSocket/
 
 Роутер использует **два способа** взаимодействия с Centrifugo:
 
-1. **WebSocket-клиент** — подключается как обычный клиент, подписывается на `session:lobby` и `mobile:lobby`. Получает все hello и регистрации автоматически. При создании сессии подписывается на канал сессии через WebSocket subscribe
-2. **Server API (HTTP)** — для управления каналами: `subscribe` (подписать клиента на канал), `publish` (отправить сообщение), `disconnect` и другие административные операции
+1. **WebSocket-клиент** — подключается как обычный клиент, подписывается на `session:lobby` и `mobile:lobby` (через JWT `channels` claim). Получает все hello и регистрации автоматически
+2. **Server API (HTTP)** — для управления каналами: `subscribe` (подписать клиента или себя на канал), `publish` (отправить сообщение), `disconnect` и другие административные операции. При создании сессии Роутер подписывается на канал сессии через **Server API subscribe** (не WebSocket subscribe — namespace `session:` запрещает клиентскую подписку)
 
 Общий JWT (один `sub` для всех обработок) используется только для lobby. При publish в lobby Centrifugo включает в push `pub.info.client` — UUID конкретного соединения, что позволяет Роутеру адресно отправить hello_ack. После получения hello_ack Чат переподключается с персональным chat_jwt — авто-подписка на канал сессии через `channels` claim (отдельный subscribe не нужен).
 
@@ -121,7 +123,7 @@ SMS отправляется всегда — `device_id` не заменяет 
 
 1. Чат (EPF) подключается к Centrifugo с общим JWT → `session:lobby`
 2. Чат публикует `hello` с данными о базе (`config_name`, `config_version`, `config_id`, `computer`, `connection_string`) в `session:lobby` (subscribe на lobby не нужен — `allow_publish_for_client: true`)
-3. Роутер получает hello через WebSocket (подписан на lobby), создаёт сессию, генерирует два JWT с `channels` claim: `chat_jwt` и `mobile_jwt`. Роутер подписывается на канал сессии через WebSocket subscribe. Через Server API `subscribe` подписывает конкретное соединение Чата (по `pub.info.client` UUID) на канал сессии
+3. Роутер получает hello через WebSocket (подписан на lobby), создаёт сессию, генерирует два JWT с `channels` claim: `chat_jwt` и `mobile_jwt`. Роутер подписывается на канал сессии через **Server API subscribe** (namespace `session:` запрещает клиентскую подписку — `allow_subscribe_for_client: false`). Через Server API `subscribe` также подписывает конкретное соединение Чата (по `pub.info.client` UUID) на канал сессии
 4. Роутер через Server API `publish` отправляет `hello_ack` с `{session_id, status: "awaiting_auth", chat_jwt, mobile_jwt}` в канал сессии (не в lobby — только этот Чат получает)
 5. Чат переподключается к Centrifugo с `chat_jwt` — авто-подписка на канал сессии через `channels` claim (отдельный subscribe не нужен)
 6. Чат отображает QR-код, содержащий `mobile_jwt` (срок жизни 1 год)

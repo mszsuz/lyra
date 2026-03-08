@@ -54,7 +54,7 @@ cd centrifugo
 
 - **Клиенты** подключаются по WebSocket с JWT, подписываются на каналы
 - **Все серверные компоненты** (Роутер, Биллинг) — **WebSocket-клиенты** Centrifugo (могут быть разнесены на разные машины)
-- **Роутер** подключается по **WebSocket** (подписан на lobby, получает все hello) **и** использует **Server API** (HTTP) для публикации сообщений в каналы. При создании сессии подписывается на канал сессии через WebSocket subscribe
+- **Роутер** подключается по **WebSocket** (подписан на lobby, получает все hello) **и** использует **Server API** (HTTP) для публикации и подписки. При создании сессии подписывается на канал сессии через **Server API subscribe** (не WebSocket subscribe — namespace `session:` запрещает клиентскую подписку)
 - **Биллинг** — WebSocket-клиент Centrifugo, подключается к каналам сессий после auth (для учёта запросов и тарификации)
 - **Адаптер** стримит ответы Claude через Centrifugo обратно клиентам
 
@@ -107,7 +107,7 @@ cd centrifugo
 2. Чат подключается по WebSocket (общий JWT), публикует `hello` в `session:lobby` (subscribe на lobby не нужен — `allow_publish_for_client: true`)
 3. Роутер получает hello через WebSocket (как подписчик lobby). `pub.info.client` содержит UUID отправителя
 4. Роутер генерирует `chat_jwt` (sub=`chat-<session_uuid>`) и `mobile_jwt` (sub=`mobile-<session_uuid>`)
-5. Роутер подписывается на `session:<session_id>` через **WebSocket subscribe** (для получения сообщений сессии)
+5. Роутер подписывается на `session:<session_id>` через **Server API subscribe** (WebSocket subscribe запрещён — `allow_subscribe_for_client: false`)
 6. Роутер через **Server API `subscribe`** подписывает клиента на `session:<session_id>` (параметр `client` = UUID из `pub.info` — адресует конкретное соединение)
 7. Роутер через **Server API `publish`** отправляет `hello_ack` в `session:<session_id>` — только этот Чат получает ответ
 8. Чат переподключается с `chat_jwt` — авто-подписка на канал сессии через `channels` claim (отдельный subscribe не нужен)
@@ -224,6 +224,9 @@ Hello-флоу: Роутер на lobby → Чат подключается → 
 
 ### test-client-id.mjs
 Два клиента с одним JWT (одинаковый `sub`). Один публикует в lobby → push содержит `pub.info.client` UUID. Server API subscribe с параметром `client` адресует только одно соединение — второй клиент не получает подписку.
+
+### test-router-flow.mjs
+Полный флоу через реальный Роутер 1С (ЕХТ_Лира_Роутер). 7 шагов: Чат connect → publish hello → hello_ack (JWT, session_id) → переподключение с chat_jwt → мобильное с mobile_jwt → auth → auth_ack + balance_update. Все 7 шагов проходят. Требует запущенный Centrifugo + серверную базу 1С с расширениями.
 
 Запуск: `node <тест>.mjs` (требует Node.js 22+ с встроенным WebSocket).
 

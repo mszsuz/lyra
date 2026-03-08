@@ -10,7 +10,7 @@
 
 | Модуль | Строк | Что содержит | Статус |
 |---|---|---|---|
-| **МодульBridge** | 174 | WebSocket-соединение, отправка, закрытие, обработчики WS_* | ✅ Реализован |
+| **МодульBridge** | ~400 | Мини-клиент Centrifugo: connect/JWT, publish, ping/pong, мульти-JSON, push-конверт, hello/hello_ack/переподключение | ✅ Реализован |
 | **МодульПарсер** | 279 | `РазобратьJSON`, `ИзвлечьТекстДельты`, `ИзвлечьТипВнутреннегоСобытия`, `ИзвлечьТипБлока`, `СобратьJSON`, `ЭкранироватьJSON` | ✅ Реализован |
 | **МодульMCP** | 537 | Strategy-dispatch, серверные обработчики `1c_query/metadata/eval/exec` | ✅ Реализован |
 | **ФормаПодключение** | 48 | URL Bridge, выбор модели, системный промпт | ✅ Реализован |
@@ -531,11 +531,11 @@ content_block_stop
 
 ## 5. WebSocket и транспорт
 
-### 5.1 Текущий и целевой транспорт
+### 5.1 Транспорт: Centrifugo (реализовано)
 
-**Текущий:** МодульBridge подключается к Bridge (Node.js) по WebSocket на `ws://localhost:3003`. Сырой JSON.
+МодульBridge — мини-клиент протокола Centrifugo на BSL (~400 строк): connect с JWT, publish, ping/pong, мульти-JSON, push-конверт, hello/hello_ack/переподключение. Поверх встроенного WebSocket-клиента платформы 8.3.27+. Без внешних компонент или SDK.
 
-**Целевой:** МодульBridge будет адаптирован для подключения к Centrifugo. Мини-клиент протокола Centrifugo на BSL (connect, subscribe, publish, ping/pong) поверх встроенного WebSocket-клиента платформы 8.3.27+. Без внешних компонент или SDK.
+Общий JWT для lobby зашит в обработку. Флоу: connect (lobby) → publish hello → hello_ack (chat_jwt, mobile_jwt) → reconnect с chat_jwt (канал сессии).
 
 ### 5.2 Retry с прогрессивной задержкой
 

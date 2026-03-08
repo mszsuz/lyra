@@ -42,7 +42,7 @@
 |-------|-----|---------------|------------|
 | `session:lobby` | Общий JWT для Чатов, зашит в EPF | Чаты 1С + Роутер (WS) | hello-рукопожатие от Чатов |
 | `mobile:lobby` | Общий JWT для мобильных, зашит в приложение | Мобильные + Роутер (WS) | Регистрация мобильных (SMS) |
-| Канал сессии `session:<id>` | Персональные JWT: chat_jwt, mobile_jwt (channels claim = авто-подписка) | Чат + мобильное + Роутер (WS subscribe) + Биллинг (WS) | Сообщения, стриминг Claude, exec-команды, баланс, медиа |
+| Канал сессии `session:<id>` | Персональные JWT: chat_jwt, mobile_jwt (channels claim = авто-подписка) | Чат + мобильное + Роутер (Server API subscribe) + Биллинг (WS) | Сообщения, стриминг Claude, exec-команды, баланс, медиа |
 | `service:events` | Серверный JWT | Роутер, Биллинг и другие серверные компоненты | Шина событий: event_router_auth_completed, event_billing_balance_checked и т.д. |
 
 Два отдельных lobby: `session:lobby` для Чатов 1С, `mobile:lobby` для мобильных. Разные общие JWT -- если один скомпрометирован, другой не затронут. Роутер сразу понимает тип клиента по каналу.
@@ -169,8 +169,9 @@ hello (получен через WebSocket)
   |         chat_jwt   (sub = chat-uuid)   -- для Чата 1С
   |         mobile_jwt (sub = mobile-uuid) -- для мобильного приложения
   |
-  +-> Роутер подписывается на session:<session_id> (WebSocket subscribe)
+  +-> Роутер подписывается на session:<session_id> (Server API subscribe)
   |         -> чтобы получать auth от мобильного и сообщения от Чата
+  |         -> WebSocket subscribe запрещён (allow_subscribe_for_client: false для session:)
   |
   +-> Server API subscribe: подписать клиента на session:<session_id>
   |         subscribe({user: "lobby-user", client: "<UUID из pub.info>", channel: "session:<session_id>"})
