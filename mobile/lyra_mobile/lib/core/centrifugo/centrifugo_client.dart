@@ -15,7 +15,7 @@ enum CentrifugoConnectionState {
 
 class CentrifugoClient {
   centrifuge.Client? _client;
-  centrifuge.ClientSubscription? _subscription;
+  centrifuge.Subscription? _subscription;
 
   final _messagesController =
       StreamController<IncomingMessage>.broadcast();
@@ -34,7 +34,7 @@ class CentrifugoClient {
   Future<void> connectToLobby() async {
     await disconnect();
 
-    final jwt = CentrifugoConfig.mobileLobbyJwt;
+    const jwt = CentrifugoConfig.mobileLobbyJwt;
     if (jwt.isEmpty) {
       print('[CentrifugoClient] mobileLobbyJwt пуст — подключение невозможно');
       return;
@@ -139,7 +139,7 @@ class CentrifugoClient {
     });
   }
 
-  void _setupSubscriptionHandlers(centrifuge.ClientSubscription sub) {
+  void _setupSubscriptionHandlers(centrifuge.Subscription sub) {
     sub.publication.listen((event) {
       _handlePublication(event.data);
     });
