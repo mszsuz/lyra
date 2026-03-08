@@ -73,12 +73,12 @@ Centrifugo v6.6.2 — сервер реального времени (WebSocket/
 |-------|---------------|-----|--------|-------------|
 | **Общий JWT (Чат)** | Зашит в EPF | общий (lobby) | Только `session:lobby` | Долгоживущий |
 | **Общий JWT (мобильное)** | Зашит в приложение | общий (mobile) | Только `mobile:lobby` | Долгоживущий |
-| **chat_jwt** | Роутер | chat-uuid | Канал сессии `session:<session_id>` | Бессрочный (без exp) |
-| **mobile_jwt** | Роутер | mobile-uuid | Канал сессии `session:<session_id>` | Бессрочный (без exp) |
+| **chat_jwt** | Роутер | chat-uuid | Канал сессии `session:<session_id>` | 1 год |
+| **mobile_jwt** | Роутер | mobile-uuid | Канал сессии `session:<session_id>` | 1 год |
 
 - Два **общих JWT** — отдельные для Чата и мобильного, дают доступ только к своим lobby
 - Персональные JWT (chat_jwt и mobile_jwt) генерируются Роутером при создании сессии, оба дают доступ к одному каналу сессии, но имеют разные sub
-- Оба персональных JWT бессрочные (без exp). mobile_jwt кодируется в QR-код. Риск минимален — auth требует валидный user_id + device_id
+- Оба персональных JWT со сроком жизни 1 год. mobile_jwt кодируется в QR-код. Риск минимален — auth требует валидный user_id + device_id
 - Персональные JWT содержат claim `channels: ["session:<session_id>"]` — авто-подписка при connect (отдельный subscribe не нужен). Безопасность: знание session_id без JWT не даёт доступа
 
 ### Роутер: WebSocket + Server API
@@ -105,7 +105,7 @@ Centrifugo v6.6.2 — сервер реального времени (WebSocket/
 1. Мобильное подключается к Centrifugo с общим JWT (мобильное) → `mobile:lobby`
 2. Отправляет `register` с номером телефона и `device_id` (UUID устройства)
 3. Роутер получает register, инициирует отправку SMS
-4. Мобильное отправляет `confirm_sms` с кодом
+4. Мобильное отправляет `confirm` с кодом
 5. Роутер проверяет код, регистрирует пользователя в MDM (Справочник Пользователи)
 6. Роутер отправляет `register_ack` с `user_id`
 7. Мобильное сохраняет `user_id` в secure storage
@@ -124,7 +124,7 @@ SMS отправляется всегда — `device_id` не заменяет 
 3. Роутер получает hello через WebSocket (подписан на lobby), создаёт сессию, генерирует два JWT с `channels` claim: `chat_jwt` и `mobile_jwt`. Роутер подписывается на канал сессии через WebSocket subscribe. Через Server API `subscribe` подписывает конкретное соединение Чата (по `pub.info.client` UUID) на канал сессии
 4. Роутер через Server API `publish` отправляет `hello_ack` с `{session_id, status: "awaiting_auth", chat_jwt, mobile_jwt}` в канал сессии (не в lobby — только этот Чат получает)
 5. Чат переподключается к Centrifugo с `chat_jwt` — авто-подписка на канал сессии через `channels` claim (отдельный subscribe не нужен)
-6. Чат отображает QR-код, содержащий `mobile_jwt` (JWT бессрочный)
+6. Чат отображает QR-код, содержащий `mobile_jwt` (срок жизни 1 год)
 7. Мобильное приложение сканирует QR, подключается к Centrifugo с `mobile_jwt` — авто-подписка на канал сессии через `channels` claim. Мобильное никогда не подключается к `session:lobby`
 8. Мобильное отправляет `auth` с `{user_id, device_id}` на канале сессии. Роутер проверяет пару user_id + device_id в MDM. При неуспешной проверке — `auth_ack` с `{status: "auth_failed"}`
 9. Роутер связывает пользователя с сессией и базой (создаёт запись в MDM Справочник Базы), публикует `event_router_auth_completed` в `service:events`. Биллинг (подписан на `service:events`) проверяет баланс, подключается к каналу сессии, публикует `event_billing_balance_checked` в `service:events`. Роутер получает ответ и отправляет `auth_ack` с `{status: "ok"}` или `{status: "insufficient_balance"}` (сессия не закрывается — при пополнении Биллинг публикует `event_billing_balance_checked ok` → Роутер отправляет `auth_ack ok`). Если Биллинг не ответил за 10 секунд — `auth_ack` с `{status: "service_unavailable"}`, работа не допускается
@@ -166,10 +166,10 @@ SMS отправляется всегда — `device_id` не заменяет 
 Claude: tool_use v8_query("ВЫБРАТЬ КПП ИЗ Справочник.Контрагенты WHERE ...")
     │
     ▼
-Адаптер ──► Роутер ──► Centrifugo ──► session:<session_id> ──► Lyra-Chat.epf (выполняет на сервере 1С)
+stdio-bridge ──► Роутер ──► Centrifugo ──► session:<session_id> ──► Lyra-Chat.epf (выполняет на сервере 1С)
     │
     ▼
-Lyra-Chat.epf ──► Centrifugo ──► session:<session_id> ──► Роутер ──► Адаптер ──► Claude
+Lyra-Chat.epf ──► Centrifugo ──► session:<session_id> ──► Роутер ──► stdio-bridge ──► Claude
 ```
 
 ## Три слоя знаний Claude
@@ -234,7 +234,7 @@ config_name + connection_string + computer → хеш → идентификат
 - HTML-чат с Markdown-рендерингом, подсветкой BSL-кода, темами (светлая/тёмная)
 - Мини-клиент протокола Centrifugo на BSL (connect, subscribe, publish, ping/pong)
 - Стриминг ответов Claude в реальном времени (thinking + text дельты)
-- Выполнение exec-команд на сервере 1С (1c_query, 1c_eval, 1c_metadata, 1c_exec)
+- Выполнение exec-команд на сервере 1С (v8_query, v8_eval, v8_metadata, v8_exec)
 - Переподключение к существующей сессии по session_id
 - Busy-блокировка: пока Claude обрабатывает запрос, повторная отправка запрещена
 - Модульная архитектура: главная форма + формы-модули (Bridge, Парсер, MCP)
@@ -261,7 +261,7 @@ config_name + connection_string + computer → хеш → идентификат
 ## Безопасность
 
 - 1С-запросы безопасны: в языке запросов 1С нет UPDATE/DELETE — только SELECT
-- 1c_eval — вычисление выражений (Вычислить()), не процедуры
+- v8_eval — вычисление выражений (Вычислить()), не процедуры
 - Деструктивных операций через exec-канал нет
 
 ## Монетизация
@@ -311,7 +311,7 @@ config_name + connection_string + computer → хеш → идентификат
 Пользователь: "Почему у контрагента Ромашка не заполнен КПП?"
   → Claude: нужны данные → использует exec
   → Vega: search_metadata → Справочники.Контрагенты, атрибут КПП
-  → exec: 1c_query → SELECT КПП, ЮрФизЛицо WHERE Наименование LIKE "Ромашка%"
+  → exec: v8_query → SELECT КПП, ЮрФизЛицо WHERE Наименование LIKE "Ромашка%"
   → Claude: видит ЮрФизЛицо = ФизЛицо → понимает причину
   → "КПП не заполнен, потому что Ромашка — физлицо. У физлиц КПП не бывает."
 ```

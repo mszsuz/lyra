@@ -75,8 +75,8 @@ cd centrifugo
 
 | Токен | sub | Назначение | Время жизни |
 |-------|-----|-----------|-------------|
-| `chat_jwt` | `chat-<session_uuid>` | Для Чата после hello | Бессрочный (без exp) |
-| `mobile_jwt` | `mobile-<session_uuid>` | Для мобильного, кодируется в QR-код | Бессрочный (без exp) |
+| `chat_jwt` | `chat-<session_uuid>` | Для Чата после hello | 1 год |
+| `mobile_jwt` | `mobile-<session_uuid>` | Для мобильного, кодируется в QR-код | 1 год |
 
 Оба подписаны тем же `hmac_secret_key` из config.json. Оба содержат claim `channels: ["session:<session_id>"]` — клиент может подписаться только на свой канал сессии (безопасность: знание session_id без JWT не даёт доступа).
 
