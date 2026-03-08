@@ -8,13 +8,17 @@
 
 ## Текущий статус
 
-**Centrifugo-транспорт работает end-to-end (подтверждено test-router-flow.mjs):**
+**Фаза 1 реализована: Вопрос → Claude → Ответ.**
+
+Centrifugo-транспорт работает end-to-end:
 
 ```
-1С (Lyra-Chat.epf) → Centrifugo → ЕХТ_Лира_Роутер (1С) → Claude
+1С (Lyra-Chat.epf) → Centrifugo → ЕХТ_Лира_Роутер (1С) → stdio-bridge → Claude → ответ → Centrifugo → Чат
 ```
 
-Полный флоу: hello → hello_ack (JWT, session_id) → переподключение с chat_jwt → мобильное с mobile_jwt → auth → auth_ack + balance_update.
+- Полный флоу подключения: hello → hello_ack (JWT, session_id) → переподключение с chat_jwt → мобильное с mobile_jwt → auth → auth_ack + balance_update
+- Обработка `chat` сообщений: Роутер принимает вопрос → запускает/перезапускает stdio-bridge → отправляет вопрос через HTTP POST /send → Claude стримит ответ → callback → Роутер оборачивает события в `stream_event` → публикует в канал сессии → Чат отображает
+- Callback-маршрутизация: ЕХТ_СТДИО получает callback от stdio-bridge → вызывает зарегистрированный обработчик (`ЕХТ_Лира_Роутер.ОбработатьОтветПроцесса`) через `Выполнить()`
 
 Bridge (Node.js) — устаревший прототип, сохранён как референс.
 

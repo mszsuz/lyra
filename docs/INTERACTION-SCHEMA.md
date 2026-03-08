@@ -313,7 +313,7 @@ auth (на канале сессии)
   "type": "chat",
   "form_id": "uuid-формы",
   "session_id": "uuid-сессии",
-  "content": "Почему у контрагента Ромашка не заполнен КПП?"
+  "text": "Почему у контрагента Ромашка не заполнен КПП?"
 }
 ```
 
@@ -521,6 +521,31 @@ config_name + connection_string + computer
 // Биллинг → session:<id>
 {"type": "balance_update", "session_id": "uuid-сессии", "balance": 1250.00, "currency": "RUB"}
 ```
+
+### Чат: сообщения и стриминг (session:\<id\>)
+
+```json
+// Чат → session:<id> (вопрос пользователя)
+{"type": "chat", "form_id": "uuid-формы", "session_id": "uuid-сессии", "text": "Почему у контрагента Ромашка не заполнен КПП?"}
+
+// Роутер → session:<id> (стриминг — события Claude, обёрнутые в stream_event)
+{"type": "stream_event", "event": {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}}
+{"type": "stream_event", "event": {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "КПП не заполнен"}}}
+{"type": "stream_event", "event": {"type": "content_block_stop", "index": 0}}
+{"type": "stream_event", "event": {"type": "message_start", ...}}
+{"type": "stream_event", "event": {"type": "message_delta", ...}}
+{"type": "stream_event", "event": {"type": "message_stop"}}
+
+// Роутер → session:<id> (финальный результат)
+{"type": "result", "result": "Полный текст ответа Claude"}
+
+// Роутер → session:<id> (ошибка)
+{"type": "error", "message": "Описание ошибки"}
+```
+
+**Механизм стриминга:** Роутер запускает stdio-bridge (Claude CLI в режиме `-p --output-format stream-json`). Claude стримит NDJSON-события (content_block_start/delta/stop, message_start/delta/stop, result). stdio-bridge буферизует все события, при получении `result` отправляет весь буфер через HTTP POST callback. ЕХТ_СТДИО принимает callback, вызывает зарегистрированный обработчик (`ЕХТ_Лира_Роутер.ОбработатьОтветПроцесса`). Роутер оборачивает каждое событие в `{type: "stream_event", event: ...}` и публикует в канал сессии через ЕХТ_Центрифуга. Чат (Lyra-Chat.epf) парсит stream_event и отображает ответ.
+
+**Перезапуск bridge:** В режиме `-p` Claude завершается после каждого ответа. Перед каждым новым вопросом Роутер вызывает `POST /restart` на stdio-bridge.
 
 ### Служебные события (service:events)
 
