@@ -15,7 +15,6 @@ enum CentrifugoConnectionState {
 
 class CentrifugoClient {
   centrifuge.Client? _client;
-  centrifuge.Subscription? _subscription;
 
   final _messagesController =
       StreamController<IncomingMessage>.broadcast();
@@ -31,13 +30,15 @@ class CentrifugoClient {
   CentrifugoConnectionState get currentState => _currentState;
 
   /// Подключение к mobile:lobby с общим JWT.
+  /// Throws [StateError] если JWT не настроен.
   Future<void> connectToLobby() async {
     await disconnect();
 
     const jwt = CentrifugoConfig.mobileLobbyJwt;
     if (jwt.isEmpty) {
-      print('[CentrifugoClient] mobileLobbyJwt пуст — подключение невозможно');
-      return;
+      throw StateError(
+        'mobileLobbyJwt не настроен — подключение к lobby невозможно',
+      );
     }
 
     _client = centrifuge.createClient(
@@ -52,10 +53,9 @@ class CentrifugoClient {
     _updateState(CentrifugoConnectionState.connecting);
     _client!.connect();
 
-    // Подписка на mobile:lobby
-    _subscription = _client!.newSubscription('mobile:lobby');
-    _setupSubscriptionHandlers(_subscription!);
-    _subscription!.subscribe();
+    // Для mobile:lobby подписка не нужна (allow_subscribe_for_client: false).
+    // Мобильное только публикует в lobby, ответы приходят на персональный
+    // канал mobile:reg-<reg_id> через server-side subscription.
   }
 
   /// Подключение с персональным JWT (авто-подписка через channels claim).
@@ -79,33 +79,18 @@ class CentrifugoClient {
   }
 
   /// Публикация JSON в канал.
+  /// Использует client.publish() — не требует подписки на канал.
   Future<void> publish(String channel, OutgoingMessage message) async {
     if (_client == null) {
-      print('[CentrifugoClient] Нет подключения для publish');
-      return;
+      throw StateError('Нет подключения для publish');
     }
 
     final data = utf8.encode(jsonEncode(message.toJson()));
-
-    // Если есть подписка на этот канал — публикуем через неё
-    if (_subscription != null) {
-      await _subscription!.publish(data);
-    } else {
-      // Для server-side subscription публикуем через клиент
-      // centrifuge-dart не поддерживает publish без подписки —
-      // используем подписку
-      final sub = _client!.newSubscription(channel);
-      _setupSubscriptionHandlers(sub);
-      sub.subscribe();
-      await sub.publish(data);
-      _subscription = sub;
-    }
+    await _client!.publish(channel, data);
   }
 
   /// Отключение.
   Future<void> disconnect() async {
-    _subscription?.unsubscribe();
-    _subscription = null;
     _client?.disconnect();
     _client = null;
     _updateState(CentrifugoConnectionState.disconnected);
@@ -136,20 +121,6 @@ class CentrifugoClient {
     // Server-side subscriptions (авто-подписка через channels claim)
     client.publication.listen((event) {
       _handlePublication(event.data);
-    });
-  }
-
-  void _setupSubscriptionHandlers(centrifuge.Subscription sub) {
-    sub.publication.listen((event) {
-      _handlePublication(event.data);
-    });
-
-    sub.subscribed.listen((event) {
-      print('[CentrifugoClient] Subscribed to channel');
-    });
-
-    sub.error.listen((event) {
-      print('[CentrifugoClient] Subscription error: ${event.error}');
     });
   }
 

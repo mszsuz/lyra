@@ -60,7 +60,15 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
   Future<void> sendPhone(String phone) async {
     state = state.copyWith(step: RegistrationStep.waitingSms);
 
-    await _centrifugo.connectToLobby();
+    try {
+      await _centrifugo.connectToLobby();
+    } on StateError catch (e) {
+      state = state.copyWith(
+        step: RegistrationStep.error,
+        errorMessage: e.message,
+      );
+      return;
+    }
 
     final deviceId = await _storage.getOrCreateDeviceId();
     await _centrifugo.publish(

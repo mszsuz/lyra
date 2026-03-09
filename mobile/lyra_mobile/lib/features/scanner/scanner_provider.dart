@@ -68,16 +68,20 @@ class ScannerNotifier extends StateNotifier<ScannerState> {
     await _centrifugo.connectToSession(qrData);
 
     // Ждём подключения, затем отправляем auth
+    var authSent = false;
     late StreamSubscription<CentrifugoConnectionState> connSub;
     connSub = _centrifugo.connectionState.listen((connState) async {
-      if (connState == CentrifugoConnectionState.connected) {
+      if (connState == CentrifugoConnectionState.connected && !authSent) {
+        authSent = true;
         connSub.cancel();
         await _sendAuth();
       }
     });
 
     // Если уже подключены
-    if (_centrifugo.currentState == CentrifugoConnectionState.connected) {
+    if (_centrifugo.currentState == CentrifugoConnectionState.connected &&
+        !authSent) {
+      authSent = true;
       connSub.cancel();
       await _sendAuth();
     }
