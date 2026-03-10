@@ -9,7 +9,9 @@
     "allowed_origins": [
       "http://localhost:3000",
       "http://localhost:8080",
-      "http://localhost:8300"
+      "http://localhost:8300",
+      "http://localhost:9091",
+      "http://192.168.1.2:9091"
     ]
   },
   "admin": {

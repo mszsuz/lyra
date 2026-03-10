@@ -116,24 +116,57 @@ class _SessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final iconData = _statusIcon(session.status);
+    final iconColor = _statusColor(session.status);
+    final statusText = _statusText(session.status);
+
     return Card(
       child: ListTile(
-        leading: Icon(
-          session.status == 'connected' || session.status == 'ok'
-              ? Icons.cloud_done
-              : Icons.cloud_off,
-          color: session.status == 'connected' || session.status == 'ok'
-              ? Colors.green
-              : Colors.grey,
-        ),
+        leading: Icon(iconData, color: iconColor),
         title: Text(session.baseName ?? 'Сессия ${session.sessionId.substring(0, 8)}...'),
-        subtitle: Text(
-          '${session.balance.toStringAsFixed(2)} ${session.currency}',
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${session.balance.toStringAsFixed(2)} ${session.currency}',
+            ),
+            if (statusText != null)
+              Text(
+                statusText,
+                style: TextStyle(color: iconColor, fontSize: 12),
+              ),
+          ],
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => context.go('/session/${session.sessionId}'),
       ),
     );
+  }
+
+  IconData _statusIcon(String status) {
+    return switch (status) {
+      'active' || 'ok' || 'connected' => Icons.cloud_done,
+      'insufficient_balance' => Icons.warning_amber_rounded,
+      'disconnected' => Icons.cloud_off,
+      _ => Icons.cloud_off,
+    };
+  }
+
+  Color _statusColor(String status) {
+    return switch (status) {
+      'active' || 'ok' || 'connected' => Colors.green,
+      'insufficient_balance' => Colors.orange,
+      'disconnected' => Colors.grey,
+      _ => Colors.grey,
+    };
+  }
+
+  String? _statusText(String status) {
+    return switch (status) {
+      'insufficient_balance' => 'Пополните баланс',
+      'disconnected' => 'Чат отключён',
+      _ => null,
+    };
   }
 }
 

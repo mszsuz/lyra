@@ -31,6 +31,7 @@ class CentrifugoClient {
 
   /// Подключение к mobile:lobby с общим JWT.
   /// Throws [StateError] если JWT не настроен.
+  /// Throws [TimeoutException] если не удалось подключиться за 10 секунд.
   Future<void> connectToLobby() async {
     await disconnect();
 
@@ -53,12 +54,26 @@ class CentrifugoClient {
     _updateState(CentrifugoConnectionState.connecting);
     _client!.connect();
 
+    // Ждём подключения с таймаутом
+    await connectionState
+        .firstWhere((s) => s == CentrifugoConnectionState.connected)
+        .timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        disconnect();
+        throw TimeoutException(
+          'Не удалось подключиться к серверу. Проверьте сеть.',
+        );
+      },
+    );
+
     // Для mobile:lobby подписка не нужна (allow_subscribe_for_client: false).
     // Мобильное только публикует в lobby, ответы приходят на персональный
     // канал mobile:reg-<reg_id> через server-side subscription.
   }
 
   /// Подключение с персональным JWT (авто-подписка через channels claim).
+  /// Throws [TimeoutException] если не удалось подключиться за 10 секунд.
   Future<void> connectToSession(String mobileJwt) async {
     await disconnect();
 
@@ -73,6 +88,19 @@ class CentrifugoClient {
 
     _updateState(CentrifugoConnectionState.connecting);
     _client!.connect();
+
+    // Ждём подключения с таймаутом
+    await connectionState
+        .firstWhere((s) => s == CentrifugoConnectionState.connected)
+        .timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        disconnect();
+        throw TimeoutException(
+          'Не удалось подключиться к серверу. Проверьте сеть.',
+        );
+      },
+    );
 
     // Авто-подписка через channels claim в JWT — подписка не нужна.
     // Сообщения приходят через server-side subscriptions.
@@ -125,15 +153,13 @@ class CentrifugoClient {
   }
 
   void _handlePublication(List<int> data) {
+    final jsonStr = utf8.decode(data);
+    print('[CentrifugoClient] Raw publication: $jsonStr');
     try {
-      final jsonStr = utf8.decode(data);
-      // Centrifugo может слать несколько JSON в одном фрейме через \n
-      for (final line in jsonStr.split('\n')) {
-        if (line.trim().isEmpty) continue;
-        final json = jsonDecode(line) as Map<String, dynamic>;
-        final message = IncomingMessage.fromJson(json);
-        _messagesController.add(message);
-      }
+      // centrifuge-dart отдаёт data одной publication — парсим целиком
+      final json = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final message = IncomingMessage.fromJson(json);
+      _messagesController.add(message);
     } catch (e) {
       print('[CentrifugoClient] Ошибка парсинга: $e');
     }

@@ -81,7 +81,20 @@
       "Bash(node test-no-subscribe-lobby.mjs)",
       "Bash(node test-full-flow.mjs)",
       "Bash(node -e \":*)",
-      "Bash(node --input-type=module -e \":*)"
+      "Bash(node --input-type=module -e \":*)",
+      "Bash(xargs grep -l \"Экспорт\")",
+      "mcp__vega-Demo__search_code",
+      "mcp__mcp-1c-docs__search_docs",
+      "Bash(xargs grep -l \"Bridge\\\\|WebSocket\")",
+      "Bash(sed -i 's/| Общий модуль | Создать | Программный/| Общий модуль | ✅ Готово | Программный/' EXT-PLAN.md)",
+      "Bash(sed -i 's/| WebSocketКлиент \\(метаданные\\) | Создать | Серверный/| WebSocketКлиент \\(метаданные\\) | ✅ Готово | Серверный/' EXT-PLAN.md)",
+      "Bash(cmd //c \"%USERPROFILE%\\\\.claude\\\\skills\\\\1c-batch\\\\scripts\\\\load-extension.bat\" \"ЕХТ_Центрифуга\\\\src\" \"ЕХТ_Центрифуга\")",
+      "Bash(./centrifugo.exe gentoken --user server)",
+      "Bash(echo \"$TOKEN\")",
+      "Bash(ls -la \"c:\\\\WORKS\\\\2026-01-31 Lyra\\\\Router\"\" 2>/dev/null || echo \"Directory not found or empty \")",
+      "Bash(find ./src -name \"*.bsl\" -exec wc -l {} +)",
+      "Bash(node test-router-flow.mjs)",
+      "Bash(tasklist)"
     ]
   }
 }

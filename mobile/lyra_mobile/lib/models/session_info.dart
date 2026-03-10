@@ -14,7 +14,7 @@ class SessionInfo {
     this.baseName,
     this.balance = 0.0,
     this.currency = 'руб',
-    this.status = 'connected',
+    this.status = 'active',
   });
 
   SessionInfo copyWith({
@@ -54,6 +54,6 @@ class SessionInfo {
         baseName: json['base_name'] as String?,
         balance: (json['balance'] as num?)?.toDouble() ?? 0.0,
         currency: json['currency'] as String? ?? 'руб',
-        status: json['status'] as String? ?? 'connected',
+        status: json['status'] as String? ?? 'active',
       );
 }

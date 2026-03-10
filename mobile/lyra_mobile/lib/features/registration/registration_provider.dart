@@ -68,6 +68,18 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
         errorMessage: e.message,
       );
       return;
+    } on TimeoutException {
+      state = state.copyWith(
+        step: RegistrationStep.error,
+        errorMessage: 'Не удалось подключиться к серверу. Проверьте сеть.',
+      );
+      return;
+    } catch (e) {
+      state = state.copyWith(
+        step: RegistrationStep.error,
+        errorMessage: 'Ошибка подключения: $e',
+      );
+      return;
     }
 
     final deviceId = await _storage.getOrCreateDeviceId();

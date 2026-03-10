@@ -24,6 +24,10 @@ class SessionScreen extends ConsumerWidget {
       );
     }
 
+    final isActive = session.status == 'active' ||
+        session.status == 'ok' ||
+        session.status == 'connected';
+
     return Scaffold(
       appBar: AppBar(
         title: Text(session.baseName ?? 'Сессия'),
@@ -31,38 +35,6 @@ class SessionScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/home'),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () async {
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Отключиться?'),
-                  content: const Text('Сессия будет завершена.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Отмена'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Отключить'),
-                    ),
-                  ],
-                ),
-              );
-              if (confirmed == true) {
-                ref
-                    .read(sessionProvider(sessionId).notifier)
-                    .disconnect();
-                if (context.mounted) {
-                  context.go('/home');
-                }
-              }
-            },
-          ),
-        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -107,22 +79,61 @@ class SessionScreen extends ConsumerWidget {
             // Статус сессии
             Card(
               child: ListTile(
-                leading: const Icon(Icons.info_outline),
+                leading: Icon(
+                  _sessionStatusIcon(session.status),
+                  color: _sessionStatusColor(session.status),
+                ),
                 title: const Text('Статус'),
                 subtitle: Text(_sessionStatusText(session.status)),
               ),
             ),
-            const SizedBox(height: 8),
 
-            // ID сессии
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.tag),
-                title: const Text('ID сессии'),
-                subtitle: Text(
-                  session.sessionId,
-                  style: const TextStyle(fontSize: 12),
-                ),
+            const Spacer(),
+
+            // Панель ввода: микрофон + камера
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Кнопка микрофона
+                  FloatingActionButton(
+                    heroTag: 'mic',
+                    onPressed: isActive
+                        ? () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Голосовой ввод -- в разработке'),
+                              ),
+                            );
+                          }
+                        : null,
+                    backgroundColor: isActive ? null : Colors.grey.shade300,
+                    child: Icon(
+                      Icons.mic,
+                      color: isActive ? Colors.white : Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  // Кнопка камеры
+                  FloatingActionButton(
+                    heroTag: 'camera',
+                    onPressed: isActive
+                        ? () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Камера -- в разработке'),
+                              ),
+                            );
+                          }
+                        : null,
+                    backgroundColor: isActive ? null : Colors.grey.shade300,
+                    child: Icon(
+                      Icons.camera_alt,
+                      color: isActive ? Colors.white : Colors.grey,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -139,10 +150,29 @@ class SessionScreen extends ConsumerWidget {
     };
   }
 
+  IconData _sessionStatusIcon(String status) {
+    return switch (status) {
+      'active' || 'ok' || 'connected' => Icons.check_circle,
+      'insufficient_balance' => Icons.warning_amber_rounded,
+      'disconnected' => Icons.cancel,
+      _ => Icons.info_outline,
+    };
+  }
+
+  Color _sessionStatusColor(String status) {
+    return switch (status) {
+      'active' || 'ok' || 'connected' => Colors.green,
+      'insufficient_balance' => Colors.orange,
+      'disconnected' => Colors.grey,
+      _ => Colors.blue,
+    };
+  }
+
   String _sessionStatusText(String status) {
     return switch (status) {
-      'ok' || 'connected' => 'Активна',
-      'insufficient_balance' => 'Недостаточно средств',
+      'active' || 'ok' || 'connected' => 'Активна',
+      'insufficient_balance' => 'Пополните баланс',
+      'disconnected' => 'Чат отключён',
       'auth_failed' => 'Ошибка авторизации',
       'service_unavailable' => 'Сервис недоступен',
       _ => status,
