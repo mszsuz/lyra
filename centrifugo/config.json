@@ -35,6 +35,11 @@
         "allow_publish_for_client": true
       },
       {
+        "name": "pipe",
+        "allow_subscribe_for_client": false,
+        "allow_publish_for_client": true
+      },
+      {
         "name": "service",
         "allow_subscribe_for_client": true,
         "allow_publish_for_client": true
