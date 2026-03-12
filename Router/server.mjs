@@ -175,7 +175,7 @@ async function handleHello(data, clientUUID) {
   await centrifugo.apiPublish(session.channel, {
     type: 'hello_ack',
     session_id: session.sessionId,
-    status: 'awaiting_auth',
+    status: 'new',
     chat_jwt: chatJwt,
     mobile_jwt: mobileJwt,
   });
