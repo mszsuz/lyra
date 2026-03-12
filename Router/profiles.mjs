@@ -111,6 +111,12 @@ export function buildMcpConfig(profile, session, toolsPort) {
     };
   }
 
+  // mcp-1c-docs (документация 1С)
+  mcpServers['mcp-1c-docs'] = {
+    type: 'http',
+    url: 'http://localhost:6280/mcp',
+  };
+
   // Vega MCP (HTTP, by config name)
   // TODO: Claude CLI 2.1.74 зависает при подключении к HTTP MCP — отключено до выяснения
   // if (profile.vegaConfig && session.configName) {

@@ -158,6 +158,10 @@ Claude stream-json → model-agnostic events:
       "args": ["tools-mcp.mjs"],
       "env": { "LYRA_TOOLS_URL": "http://localhost:<port>/tool-call", "LYRA_SESSION_ID": "<id>" }
     },
+    "mcp-1c-docs": {
+      "type": "http",
+      "url": "http://localhost:6280/mcp"
+    },
     "vega": {
       "type": "http",
       "url": "http://localhost:<vega_port>/mcp",
