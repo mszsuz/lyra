@@ -1,14 +1,14 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.21">
-	<ExternalDataProcessor uuid="f1075815-e350-4ee1-8b49-e85209ba2494">
+	<ExternalDataProcessor uuid="d312feef-32aa-4dfa-a520-a95cbe1bd7fa">
 		<InternalInfo>
 			<xr:ContainedObject>
 				<xr:ClassId>c3831ec8-d8d5-4f93-8a22-f9bfae07327f</xr:ClassId>
-				<xr:ObjectId>8de39288-b97c-44a8-814c-5438a064a8f6</xr:ObjectId>
+				<xr:ObjectId>7dc6735b-d1c8-4283-af14-d0726b3c7ea1</xr:ObjectId>
 			</xr:ContainedObject>
 			<xr:GeneratedType name="ExternalDataProcessorObject.Lyra_Chat_multiform" category="Object">
-				<xr:TypeId>8c6346de-7773-4ef7-96d7-52a813c2c13c</xr:TypeId>
-				<xr:ValueId>3db8fe4f-32bb-41e6-a3e6-a695c56798ab</xr:ValueId>
+				<xr:TypeId>1f2c6d26-a1ae-4fd4-b26d-b724181b03c8</xr:TypeId>
+				<xr:ValueId>c781f505-24a9-4740-b081-8f6effafbab1</xr:ValueId>
 			</xr:GeneratedType>
 		</InternalInfo>
 		<Properties>
@@ -19,7 +19,7 @@
 					<v8:content>Лира: Чат (модульный)</v8:content>
 				</v8:item>
 			</Synonym>
-			<Comment>26.03.02.16</Comment>
+			<Comment>26.03.11.1</Comment>
 			<DefaultForm>ExternalDataProcessor.Lyra_Chat_multiform.Form.Форма</DefaultForm>
 			<AuxiliaryForm/>
 		</Properties>
