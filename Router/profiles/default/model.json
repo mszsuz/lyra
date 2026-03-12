@@ -7,6 +7,8 @@
     "mcp__1c__lyra_data_exec",
     "mcp__1c__lyra_meta_list",
     "mcp__1c__lyra_nav_resolve",
-    "mcp__1c__lyra_diag_read_log"
+    "mcp__1c__lyra_diag_read_log",
+    "mcp__1c__lyra_meta_describe",
+    "mcp__1c__lyra_data_read"
   ]
 }
