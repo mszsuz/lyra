@@ -102,6 +102,9 @@ centrifugo.onPush((push) => {
       case 'abort':
         handleAbort(session);
         break;
+      case 'disconnect':
+        handleDisconnect(session);
+        break;
     }
   }
 });
@@ -268,6 +271,25 @@ function handleAbort(session) {
       aborted: true,
     });
   }
+}
+
+// --- Disconnect ---
+
+function handleDisconnect(session) {
+  log.info(TAG, `disconnect: session=${session.sessionId}`);
+
+  // Kill Claude process
+  if (session.claudeProcess) {
+    try { session.claudeProcess.kill(); } catch {}
+    session.claudeProcess = null;
+  }
+
+  session.streaming = false;
+  session.status = 'disconnected';
+  session._sendChat = null;
+  session._abort = null;
+
+  // Не удаляем сессию — клиент может переподключиться по form_id (TTL 30 мин)
 }
 
 // --- Mobile registration (MVP stubs) ---

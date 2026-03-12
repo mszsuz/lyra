@@ -91,7 +91,7 @@ export class SessionManager {
   _cleanup() {
     const now = Date.now();
     for (const [id, s] of this.sessions) {
-      if (now - s.lastActivity > this.ttl && !s.claudeProcess) {
+      if (now - s.lastActivity > this.ttl) {
         log.info(TAG, `TTL expired for session ${id}`);
         this.remove(id);
       }
