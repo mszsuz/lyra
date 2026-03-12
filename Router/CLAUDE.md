@@ -146,6 +146,8 @@ Claude stream-json → model-agnostic events:
 - **tools.json** — описания lyra_* инструментов для MCP server
 - **vega.json** — маппинг config_name → Vega MCP port
 
+**Hot reload:** профиль перечитывается при каждом спавне Claude (`loadProfile()` в `spawnClaudeForSession`). Можно менять tools.json, model.json, system-prompt.md без перезапуска роутера — изменения подхватятся при следующей сессии или респавне.
+
 ## MCP Config (генерируется для каждой сессии)
 
 ```json

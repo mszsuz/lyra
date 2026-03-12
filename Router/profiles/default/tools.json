@@ -56,6 +56,22 @@
         },
         "required": ["type", "name"]
       }
+    },
+    {
+      "name": "lyra_diag_read_log",
+      "description": "Прочитать журнал регистрации 1С. Возвращает записи с датой, уровнем, событием, пользователем, комментарием. По умолчанию последние 100 записей.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "start_date": { "type": "string", "description": "Начало периода (ISO 8601, например 2026-03-01T00:00:00)" },
+          "end_date": { "type": "string", "description": "Конец периода (ISO 8601)" },
+          "level": { "type": "string", "description": "Уровень: Ошибка, Предупреждение, Информация, Примечание (можно несколько через запятую)" },
+          "event": { "type": "string", "description": "Имя события журнала (например _$Data$_.Post для проведение документа)" },
+          "user": { "type": "string", "description": "Имя пользователя информационной базы" },
+          "comment": { "type": "string", "description": "Подстрока в комментарии" },
+          "limit": { "type": "number", "description": "Максимальное количество записей (по умолчанию 100, максимум 500)" }
+        }
+      }
     }
   ]
 }

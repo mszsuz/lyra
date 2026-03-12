@@ -35,7 +35,7 @@ const config = loadConfig();
 log.setLevel(config.logLevel);
 log.info(TAG, 'Starting Lyra Router');
 
-const profile = loadProfile(config.profilePath);
+let profile = loadProfile(config.profilePath);
 const sessions = new SessionManager(config.sessionTTL);
 
 // --- Start HTTP tool server ---
@@ -326,6 +326,8 @@ async function handleMobileConfirm(data, clientUUID) {
 // --- Spawn Claude ---
 
 function spawnClaudeForSession(session, initialMessage, { resume = false } = {}) {
+  // Reload profile on each spawn — pick up tools.json/model.json changes without restart
+  profile = loadProfile(config.profilePath);
   const { promptPath, mcpConfigPath } = writeTempFiles(session, profile, toolsPort);
 
   const { proc, sendChat, abort } = spawnClaude(session, {
