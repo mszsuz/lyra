@@ -216,26 +216,49 @@ JWT общий (один `sub` для всех обработок). При publi
 
 Мобильное приложение публикует фото/голос на канал сессии. Роутер подхватывает медиа и передаёт в Claude. Чат видит медиа на канале сессии и отображает в интерфейсе.
 
-## Запуск Claude через stdio-bridge
+## Запуск Claude через centrifugo_stdio
 
 ```text
-ЕХТ_Лира_Роутер ──► ЕХТ_СтдИО ──► stdio-bridge.exe
-    параметры stdio-bridge:
-      --program "claude"
-      --args "-p --output-format stream-json --system-prompt <промпт> --mcp-config <конфиг>"
-      --port <порт>
-      --callback <URL обратного вызова в 1С>
-      --mode ndjson
+ЕХТ_Лира_Роутер ──► centrifugo_stdio.exe
+    параметры centrifugo_stdio:
+      --url ws://localhost:11000/connection/websocket
+      --token <JWT relay>
+      --channel pipe:<session_id>
+      --config <lyra-bridge-<session_id>.json>
 ```
 
-**Поток данных:**
-
-```text
-Сообщение пользователя → Роутер → HTTP POST /send → stdio-bridge → stdin → Claude CLI
-Claude CLI → stdout → stdio-bridge → HTTP POST /callback → Роутер → ЕХТ_Центрифуга.Publish → канал сессии
+Config файл centrifugo_stdio (`lyra-bridge-<session_id>.json`) задаёт программу и аргументы Claude CLI:
+```json
+{"program":"claude","args":["-p","--verbose","--input-format","stream-json","--output-format","stream-json",
+  "--include-partial-messages","--disable-slash-commands","--session-id","<uuid>","--model","sonnet",
+  "--system-prompt-file","<path>","--mcp-config","<path>","--allowedTools","<tools>",
+  "--dangerously-skip-permissions","--strict-mcp-config"]}
 ```
 
-stdio-bridge работает в режиме callback: stdout Claude отправляется HTTP POST в 1С (ЕХТ_СТДИО.ОбработатьCallback), Роутер разбирает NDJSON и публикует в Centrifugo.
+### Профили (файлы конфигурации модели)
+
+Каталог профиля: `Профили/Основной/`
+
+| Файл | Назначение |
+|------|-----------|
+| `model.json` | Модель (`sonnet`), список `allowedTools` (клиентские v8_*) |
+| `system-prompt.md` | Шаблон системного промпта с `{{ }}` переменными |
+| `tools.json` | Описания клиентских инструментов (input_schema) для MCP relay |
+| `vega.json` | Конфигурация серверного MCP Vega: тип, заголовки, маппинг конфигураций → порты |
+
+### MCP-конфигурация (генерируется динамически)
+
+При создании сессии Роутер генерирует `lyra-mcp-<session_id>.json` в temp:
+
+```json
+{"mcpServers":{
+  "1c":{"command":"node","args":["relay.mjs","--url","...","--token","...","--channel","...","--tools","..."]},
+  "vega":{"type":"http","url":"http://localhost:60020/mcp","headers":{"X-API-Key":"vega"}}
+}}
+```
+
+- **1c** (всегда) — MCP relay для клиентских инструментов (v8_query, v8_eval и т.д.) через Centrifugo
+- **vega** (опционально) — серверный MCP для поиска метаданных конфигурации, добавляется если `config_name` из hello найден в `vega.json`
 
 ## exec-команды (маршрутизация MCP -> 1С клиента)
 
