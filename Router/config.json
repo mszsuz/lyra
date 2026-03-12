@@ -1,0 +1,14 @@
+{
+  "centrifugo": {
+    "wsUrl": "ws://localhost:11000/connection/websocket",
+    "apiUrl": "http://localhost:11000/api"
+  },
+  "claude": {
+    "path": "claude",
+    "model": "sonnet"
+  },
+  "toolsPort": 0,
+  "profilePath": "./profiles/default",
+  "logLevel": "info",
+  "sessionTTL": 1800000
+}

@@ -1,286 +1,178 @@
-# Lyra-Router — транспорт и маршрутизация
+# Lyra-Router — Node.js роутер
 
 Общайся с пользователем на русском языке.
 
 ## Что это
 
-Центральный транспортный слой комплекса Lyra. Расширение конфигурации 1С — **ЕХТ_Лира_Роутер**. Все коммуникации между клиентами и серверными компонентами идут через Роутер. Заменяет Bridge (Node.js прототип), берёт на себя все его функции: управление сессиями Claude, маршрутизацию exec-команд в 1С клиента, стриминг ответов.
+Центральный транспортный слой комплекса Lyra. Один Node.js процесс — заменяет ЕХТ_Лира_Роутер (BSL), centrifugo_stdio (Rust) и 1c-mcp-relay (Node.js).
+
+## Стратегия
+
+Фаза CLI → Фаза API:
+1. **Сейчас (CLI):** Claude CLI как child process, ноль npm-зависимостей
+2. **Потом (API):** `@anthropic-ai/sdk`, прямые вызовы, tool calls в процессе
 
 ## Стек
 
-- **Centrifugo** — сервер реального времени (WebSocket/SSE транспорт до клиентов)
-- **1С:Предприятие 8** — серверная база, бизнес-логика маршрутизации
-- **ЕХТ_Лира_Роутер** — расширение конфигурации 1С
-- **ЕХТ_СтдИО** — расширение 1С для запуска внешних процессов (симв. ссылка Router/ЕХТ_СтдИО → C:\1ext.ru\projects\github.com\ЕХТ_СтдИО)
-- **stdio-bridge** (Rust, ~600 КБ) — универсальный транспорт stdin/stdout ↔ HTTP/WebSocket. Запускается из 1С через ЕХТ_СтдИО. Это и есть «Адаптер» из архитектуры
+- **Node.js 22+** — встроенный WebSocket, fetch, crypto
+- **Centrifugo v6** — realtime транспорт (WebSocket/SSE)
+- **Claude CLI** — child process, stream-json
+- **Ноль npm-зависимостей** (фаза CLI)
 
 ## Статус
 
-**Фаза 1 реализована: Вопрос → Claude → Ответ.**
+**Фаза 1 реализована и протестирована: Hello flow.**
 
-Работает: hello → hello_ack → переподключение → auth (стаб) → auth_ack → chat → Claude (через stdio-bridge) → stream_event / result → Чат.
-
-Стабы: auth (без MDM/Биллинга), Модератор (не реализован), переподключение (не реализовано).
+Работает: connect → auto-subscribe lobbies → hello → создание сессии → JWT → apiSubscribe → hello_ack → auto-auth (MVP) → auth_ack → spawn Claude CLI.
 
 ## Архитектура
 
 ```
-Клиенты (Чат 1С, Мобильное, Сайт)
-        │
-        ▼
-    Centrifugo (:11000, WebSocket/SSE транспорт)
-        │ WebSocket              │ Server API (HTTP)
-        │                        │
-        ▼                        ▼
-    ЕХТ_Лира_Роутер (расширение 1С, серверная база)
-        ├── Генерация JWT (chat_jwt, mobile_jwt)
-        ├── Авторизация (через MDM)
-        ├── Проверка баланса (через Биллинг)
-        ├── Модератор (модуль) → проверка сообщения
-        ├── Выбор Vega-инстанса по конфигурации клиента
-        └── Запуск адаптера через ЕХТ_СтдИО
-                │
-                ▼
-        Адаптер (exe) ──► Claude (Haiku/Sonnet/Opus)
-                              │
-                              ├── Vega (MCP, метаданные конфигураций)
-                              └── mcp-1c-docs (документация 1С)
+Chat (1C EPF) ──► Centrifugo ──► Node.js Router ──► Claude CLI (child process)
+Mobile app ─────►    :11000     │    │                 ↕ MCP
+                                │    │            tools-mcp.mjs ──► Router HTTP ──► Centrifugo ──► Chat EPF
+                                │    └── Vega (HTTP MCP, напрямую через CLI)
+                                └── users/billing (in-memory MVP)
 ```
 
-- **Centrifugo** — realtime-транспорт до клиентов (переподключение, доставка, масштабирование)
-- **ЕХТ_Лира_Роутер** — бизнес-логика: кому, куда, с какими правами
-- **stdio-bridge** — Rust-бинарник, запускается 1С через ЕХТ_СтдИО с параметрами (программа, порт, callback, режим). Управляет Claude CLI процессом
+### Как работают 1C-инструменты
+
+1. Claude CLI спавнит `tools-mcp.mjs` (MCP server, stdio) через `--mcp-config`
+2. Claude вызывает `v8_query` → `tools-mcp.mjs` получает MCP request
+3. `tools-mcp.mjs` отправляет HTTP POST на Router `localhost:<port>/tool-call`
+4. Router публикует `tool_call` в Centrifugo → Chat EPF выполняет → `tool_result` приходит обратно
+5. Router отвечает на HTTP → `tools-mcp.mjs` возвращает MCP response → Claude продолжает
+
+## Файлы
+
+```
+Router/
+├── server.mjs          — точка входа, диспетчер, push dispatcher
+├── config.mjs          — загрузка config.json + centrifugo/config.json
+├── config.json         — конфигурация роутера
+├── centrifugo.mjs      — WS-клиент (built-in) + Server API (fetch)
+├── sessions.mjs        — Map сессий, индекс по form_id, TTL cleanup
+├── jwt.mjs             — HMAC SHA-256 (node:crypto)
+├── claude.mjs          — spawn Claude CLI, stream-json → protocol.mjs
+├── tools-mcp.mjs       — MCP server (stdio), спавнится Claude CLI для v8_* tools
+├── tools.mjs           — HTTP endpoint для tool_call/tool_result
+├── protocol.mjs        — stream-json → универсальный протокол
+├── profiles.mjs        — загрузка профилей, шаблонизация промптов, MCP config
+├── users.mjs           — in-memory пользователи (MVP)
+├── log.mjs             — структурированный лог в stderr
+├── test-hello.mjs      — тест hello flow
+├── package.json        — type: module, без зависимостей
+├── profiles/default/
+│   ├── model.json          — модель, allowedTools
+│   ├── system-prompt.md    — шаблон промпта ({{ }} переменные)
+│   ├── tools.json          — описания v8_* инструментов (input_schema)
+│   └── vega.json           — маппинг конфигураций → Vega порты
+├── CLAUDE.md           — этот файл
+├── ЕХТ_Лира_Роутер/    — симлинк на расширение 1С (историческое)
+└── ЕХТ_СтдИО/          — симлинк на расширение 1С (историческое)
+```
+
+## Запуск
+
+```bash
+# Centrifugo должен быть запущен
+cd centrifugo && ./centrifugo.exe --config=config.json
+
+# Router
+cd Router && node server.mjs
+
+# Тест hello flow
+node test-hello.mjs
+```
 
 ## Взаимодействие с Centrifugo
 
-Роутер использует **два способа** взаимодействия с Centrifugo:
+### WebSocket-клиент (приём)
 
-### 1. WebSocket-клиент (приём сообщений)
+Роутер подключается с JWT, содержащим `channels: ["session:lobby", "mobile:lobby"]` — авто-подписка при connect (namespace `session:` имеет `allow_subscribe_for_client: false`).
 
-Роутер подключается к Centrifugo как обычный WebSocket-клиент и подписывается на каналы. Через WebSocket Роутер **получает** все входящие сообщения:
+Для каналов сессий — Server API subscribe (`apiSubscribe(user, client, channel)`).
 
-- `hello` из `session:lobby` — для обработки подключений Чатов
-- `hello` из `mobile:lobby` — для регистрации мобильных приложений
-- Сообщения пользователей из каналов сессий
-- `auth` от мобильного приложения из каналов сессий
-- Медиа (фото, голос) от мобильного приложения из каналов сессий
+Push dispatcher в server.mjs маршрутизирует по каналу и типу:
 
-Роутер подписан на оба lobby-канала (`session:lobby` и `mobile:lobby`) и на каналы всех активных сессий. При создании сессии (шаг 3 обработки hello) Роутер сразу подписывается на канал `session:<session_id>` через WebSocket subscribe — это позволяет получать `auth` от мобильного приложения и сообщения пользователей без ожидания.
+| Канал | type | Действие |
+|-------|------|----------|
+| session:lobby | hello | create session, JWT, apiSubscribe, hello_ack, spawn Claude |
+| session:* | chat | claude.sendChat(text) → stdout → protocol → apiPublish |
+| session:* | tool_result | resolve pending promise |
+| session:* | auth | verify, auth_ack |
+| mobile:lobby | register/confirm | MVP обработка |
 
-Роутер аутентифицируется в Centrifugo через JWT-токен (как и любой другой клиент).
+### Server API (управление + отправка)
 
-### 2. Server API (управление каналами и отправка)
+- `apiSubscribe(user, client, channel)` — подписать клиента на канал (hello_ack delivery, router self-subscribe)
+- `apiPublish(channel, data)` — hello_ack, стриминг text_delta, auth_ack, tool_call
 
-Роутер использует HTTP Server API для **управления** каналами и **отправки** сообщений:
+## JWT
 
-- `subscribe` — подписать конкретного клиента на персональный канал `session:<session_id>` (для доставки hello_ack)
-- `publish` — отправить hello_ack в `session:<session_id>`, стримить ответы Claude в канал сессии, отправлять exec-команды
+Роутер генерирует 2 персональных JWT при hello:
 
-Server API аутентифицируется через `X-API-Key` (из `http_api.key` в config.json).
+| Токен | sub | channels | TTL |
+|-------|-----|----------|-----|
+| chat_jwt | `chat-<session_id>` | `[session:<session_id>]` | 1 год |
+| mobile_jwt | `mobile-<session_id>` | `[session:<session_id>]` | 1 год |
 
-### Адресация конкретного клиента
+Авто-подписка через channels claim — клиент получает `subs` в connect response.
 
-JWT общий (один `sub` для всех обработок). При publish в lobby Centrifugo включает в push `pub.info.client` — UUID соединения. Роутер через Server API `subscribe({user, client, channel})` подписывает именно это соединение на `session:<session_id>`, затем публикует hello_ack туда. После получения hello_ack Чат переподключается с персональным chat_jwt. Подтверждено тестами: `test-two-clients.mjs`, `test-client-id.mjs`.
+## Универсальный протокол (protocol.mjs)
 
-## Генерация JWT
+Claude stream-json → model-agnostic events:
 
-При обработке hello Роутер генерирует **2 JWT-токена**, подписанных `hmac_secret_key` из config.json Centrifugo (HMAC SHA-256):
+| Claude stream-json | → | Универсальный протокол |
+|---|---|---|
+| `content_block_delta` → `text_delta` | → | `{type: "text_delta", text}` |
+| `content_block_start` (thinking) | → | `{type: "thinking_start"}` |
+| `content_block_delta` → `thinking_delta` | → | `{type: "thinking_delta", text}` |
+| `content_block_stop` (after thinking) | → | `{type: "thinking_end"}` |
+| `result` | → | `{type: "assistant_end", text}` |
 
-- **chat_jwt** — `sub` = `chat-<session_uuid>`, срок жизни 1 год. Выдаётся Чату для переподключения на канал сессии.
-- **mobile_jwt** — `sub` = `mobile-<session_uuid>`, срок жизни 1 год. Выдаётся Чату для отображения в QR-коде.
+## Профили
 
-Оба JWT дают доступ к одному и тому же каналу сессии. Содержат claim `channels: ["session:<session_id>"]` — Centrifugo автоматически подписывает клиента на эти каналы при connect (отдельный subscribe не нужен). После получения hello_ack клиенты переподключаются к Centrifugo с персональным JWT и сразу получают авто-подписку на канал сессии.
+`profiles/default/` — набор файлов для конфигурации Claude сессии:
 
-Структура персонального JWT:
+- **model.json** — модель (`sonnet`), `allowedTools` (MCP tool names)
+- **system-prompt.md** — шаблон с `{{ ИмяКонфигурации }}`, `{% Если %}` блоками
+- **tools.json** — описания v8_* инструментов для MCP server
+- **vega.json** — маппинг config_name → Vega MCP port
+
+## MCP Config (генерируется для каждой сессии)
+
 ```json
 {
-  "sub": "chat-<session_uuid>",
-  "channels": ["session:<session_id>"]
+  "mcpServers": {
+    "1c": {
+      "command": "node",
+      "args": ["tools-mcp.mjs"],
+      "env": { "LYRA_TOOLS_URL": "http://localhost:<port>/tool-call", "LYRA_SESSION_ID": "<id>" }
+    },
+    "vega": {
+      "type": "http",
+      "url": "http://localhost:<vega_port>/mcp",
+      "headers": {"X-API-Key": "vega"}
+    }
+  }
 }
 ```
 
-Оба JWT со сроком жизни 1 год (`exp` = now + 365 дней).
-
-**Примечание:** Server API `subscribe` используется только для доставки hello_ack — подписать конкретное соединение на `session:<session_id>` до переподключения. После этого клиенты работают с персональными JWT.
-
-## Каналы
-
-- **session:lobby** — общий канал для Чатов (1С обработок), доступен по зашитому JWT. Используется только для hello.
-- **mobile:lobby** — общий канал для мобильных приложений, доступен по отдельному зашитому JWT. Используется для регистрации мобильных.
-- **Канал сессии** (`session:<session_id>`) — создаётся Роутером при обработке hello. Доступ через chat_jwt и mobile_jwt. Канал сессии остаётся на всё время работы, переключения на другой канал не происходит.
-
-У каждого lobby свой общий JWT (разные `sub`): один для Чатов, другой для мобильных.
-
-- **service:events** — служебный канал (шина событий между серверными компонентами). Роутер публикует события (`event_router_session_created`, `event_router_auth_completed` и др.) в `service:events`, Биллинг и другие серверные компоненты подписываются и реагируют. Это основной механизм уведомления серверных компонентов о событиях — например, так Роутер уведомляет Биллинг о новых сессиях и завершении авторизации.
-
-## Флоу авторизации (hello + QR)
-
-```
-1. Чат (epf) подключается к Centrifugo (общий JWT, session:lobby)
-2. Чат публикует hello: {form_id, config_name, config_version, config_id, connection_string, computer}
-3. Роутер получает hello через WebSocket (подписан на session:lobby):
-   a. Создать сессию в регистре сведений (session_id + данные о базе)
-   b. НЕ регистрировать базу в MDM (пользователь ещё неизвестен)
-   c. Сгенерировать chat_jwt и mobile_jwt
-   d. Подписаться на канал session:<session_id> через WebSocket subscribe (чтобы получать auth от мобильного и сообщения)
-4. Роутер через Server API subscribe подписывает клиента на session:<session_id>
-   subscribe({user: "lobby-user", client: "<UUID из pub.info>", channel: "session:<session_id>"})
-5. Роутер через Server API publish отправляет hello_ack в session:<session_id>:
-   {session_id, chat_jwt, mobile_jwt, status: "awaiting_auth"}
-   Только этот клиент получает ответ
-6. Чат переподключается к Centrifugo с chat_jwt (на канал сессии)
-7. Чат показывает QR = mobile_jwt
-8. Мобильное приложение сканирует QR, подключается к Centrifugo с mobile_jwt (на канал сессии)
-9. Мобильное приложение отправляет {type: "auth", user_id, device_id} на канале сессии
-10. Роутер обрабатывает auth:
-    a. MDM: найти пользователя по user_id + проверить device_id. При ошибке → auth_ack с status auth_failed
-    b. MDM: связать пользователя с сессией и базой
-    c. Публикует event_router_auth_completed в service:events
-    d. Ждёт event_billing_balance_checked от Биллинга (таймаут 10 секунд)
-    e. Биллинг подключается к каналу сессии как WebSocket-клиент
-11. Роутер отправляет auth_ack на канале сессии (на основе ответа Биллинга):
-    - ok — баланс достаточен
-    - insufficient_balance — сессия НЕ закрывается. При пополнении Биллинг публикует event_billing_balance_checked ok → Роутер отправляет auth_ack ok
-    - service_unavailable — Биллинг не ответил (таймаут), работа не допускается
-```
-
-## Серверные компоненты через Centrifugo
-
-Все серверные компоненты (Роутер, Биллинг, MDM) общаются между собой через Centrifugo. Это позволяет разносить их на разные серверы — единственная точка связи это Centrifugo.
-
-- **Биллинг** — подписан на `service:events`. При `event_router_auth_completed` проверяет баланс, подключается к каналу сессии, публикует `event_billing_balance_checked` в `service:events`. Роутер на основе ответа отправляет `auth_ack`. При пополнении — Биллинг публикует `event_billing_balance_checked ok` → Роутер отправляет `auth_ack ok`. После каждого ответа Claude Биллинг списывает стоимость и отправляет `balance_update` в канал сессии.
-
-## Обработка сообщений (Фаза 1 — реализовано)
-
-После авторизации, когда пользователь отправляет `{type: "chat", text: "..."}` в канал сессии:
-
-1. Роутер получает сообщение из канала сессии (через WebSocket → `ОбработатьСообщениеЧата`)
-2. ~~Модератор проверяет сообщение~~ (TODO: Фаза 6)
-3. Роутер сохраняет канал в `ЕХТ_Настройки` (ключ `LyraActiveChannel`) и регистрирует себя как обработчик callback (ключ `ОбработчикСообщений`)
-4. Роутер запускает stdio-bridge (если не запущен) или перезапускает процесс Claude (`POST /restart`)
-5. Передаёт вопрос через `POST /send` → stdio-bridge → `claude -p --output-format stream-json`
-6. Claude отвечает → stdout → stdio-bridge → `POST /callback` → ЕХТ_СТДИО.ОбработатьCallback
-7. ЕХТ_СТДИО вызывает зарегистрированный обработчик: `ЕХТ_Лира_Роутер.ОбработатьОтветПроцесса(Данные)`
-8. Роутер оборачивает события Claude в `stream_event` и публикует в канал сессии → Чат отображает
-
-### Маршрутизация callback
-
-ЕХТ_СТДИО при получении callback от stdio-bridge вызывает зарегистрированный обработчик через `Выполнить()`. Имя модуля-обработчика хранится в настройках ЕХТ_СТДИО (`ОбработчикСообщений`). Канал для публикации — в настройке `LyraActiveChannel`. Фаза 1 поддерживает **одну активную сессию** (для нескольких сессий потребуется маппинг bridge → channel).
-
-### Формат сообщений на канале
-
-```json
-// Чат → канал сессии (вопрос)
-{"type": "chat", "text": "...", "form_id": "uuid"}
-
-// Роутер → канал сессии (стриминг)
-{"type": "stream_event", "event": {"type": "content_block_start", "content_block": {"type": "text"}}}
-{"type": "stream_event", "event": {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "..."}}}
-{"type": "stream_event", "event": {"type": "content_block_stop"}}
-
-// Роутер → канал сессии (финал)
-{"type": "result", "result": "полный текст ответа"}
-
-// Роутер → канал сессии (ошибка)
-{"type": "error", "message": "описание ошибки"}
-```
-
-## Модератор
-
-Модуль расширения ЕХТ_Лира_Роутер. Проверяет каждое сообщение пользователя перед отправкой в Claude. Синхронный HTTP-вызов к Anthropic API (быстрая модель, например Haiku), без стриминга, без CLI.
-
-```text
-Пользователь ──► Модератор ──┬── Запрещённое → Предупреждение пользователю
-                             ├── Рискованное  → Сообщение + приписка-напоминание → Claude
-                             └── Обычное      → Сообщение без изменений → Claude
-```
-
-Три результата:
-
-- **Блокировка** — сообщение запрещено (prompt injection, вопросы об устройстве комплекса, jailbreak). Пользователь получает предупреждение
-- **Напоминание** — сообщение рискованное (может спровоцировать выход из роли: "расскажи о себе", "какая ты модель?"). Модератор добавляет приписку-напоминание к сообщению для Claude
-- **ОК** — сообщение проходит без изменений
-
-### Соблюдение легенды (двойная защита)
-
-Для пользователя это **Лира — AI-ассистент**. Модель не должна упоминать Anthropic, Claude, Opus, Sonnet, Haiku, токены, контекстное окно, API и прочие детали реализации.
-
-Защита на двух уровнях:
-
-1. **Системный промпт Claude** (основная линия) — инструкция "ты — Лира, никогда не упоминай..."
-2. **Модератор** (страховочная сетка) — при рискованных вопросах добавляет приписку-напоминание
-
-Это решает проблему стриминга: не нужно проверять исходящие ответы (несовместимо с потоковой отдачей). Вместо этого модератор **предупреждает** модель на входе.
-
-## Медиа от мобильного приложения
-
-Мобильное приложение публикует фото/голос на канал сессии. Роутер подхватывает медиа и передаёт в Claude. Чат видит медиа на канале сессии и отображает в интерфейсе.
-
-## Запуск Claude через centrifugo_stdio
-
-```text
-ЕХТ_Лира_Роутер ──► centrifugo_stdio.exe
-    параметры centrifugo_stdio:
-      --url ws://localhost:11000/connection/websocket
-      --token <JWT relay>
-      --channel pipe:<session_id>
-      --config <lyra-bridge-<session_id>.json>
-```
-
-Config файл centrifugo_stdio (`lyra-bridge-<session_id>.json`) задаёт программу и аргументы Claude CLI:
-```json
-{"program":"claude","args":["-p","--verbose","--input-format","stream-json","--output-format","stream-json",
-  "--include-partial-messages","--disable-slash-commands","--session-id","<uuid>","--model","sonnet",
-  "--system-prompt-file","<path>","--mcp-config","<path>","--allowedTools","<tools>",
-  "--dangerously-skip-permissions","--strict-mcp-config"]}
-```
-
-### Профили (файлы конфигурации модели)
-
-Каталог профиля: `Профили/Основной/`
-
-| Файл | Назначение |
-|------|-----------|
-| `model.json` | Модель (`sonnet`), список `allowedTools` (клиентские v8_*) |
-| `system-prompt.md` | Шаблон системного промпта с `{{ }}` переменными |
-| `tools.json` | Описания клиентских инструментов (input_schema) для MCP relay |
-| `vega.json` | Конфигурация серверного MCP Vega: тип, заголовки, маппинг конфигураций → порты |
-
-### MCP-конфигурация (генерируется динамически)
-
-При создании сессии Роутер генерирует `lyra-mcp-<session_id>.json` в temp:
-
-```json
-{"mcpServers":{
-  "1c":{"command":"node","args":["relay.mjs","--url","...","--token","...","--channel","...","--tools","..."]},
-  "vega":{"type":"http","url":"http://localhost:60020/mcp","headers":{"X-API-Key":"vega"}}
-}}
-```
-
-- **1c** (всегда) — MCP relay для клиентских инструментов (v8_query, v8_eval и т.д.) через Centrifugo
-- **vega** (опционально) — серверный MCP для поиска метаданных конфигурации, добавляется если `config_name` из hello найден в `vega.json`
-
-## exec-команды (маршрутизация MCP -> 1С клиента)
-
-Когда Claude нужны данные из базы пользователя:
-
-```
-Claude: tool_use v8_query(...)
-    │
-    ▼
-Адаптер ──► Роутер ──► Centrifugo (publish) ──► канал сессии ──► Lyra-Chat.epf
-                                                                    │
-                                                              выполняет на сервере 1С
-                                                                    │
-Lyra-Chat.epf ──► Centrifugo (publish) ──► канал сессии ──► Роутер ──► Адаптер ──► Claude
-```
-
-Роутер знает пару "Адаптер (Claude-процесс) <-> канал сессии" — поэтому exec-команды попадают в правильную базу 1С.
-
 ## Переподключение
 
-Переподключение определяется по `form_id` — UUID формы обработки. `form_id` включается в hello.
+По `form_id` (UUID формы). Известный form_id + живая сессия → hello_ack status `reconnected`, новый chat_jwt, Claude продолжает.
 
-- `form_id` **известен**, сессия жива (TTL 30 минут) → `hello_ack` со статусом `reconnected`, новый `chat_jwt`, без `mobile_jwt`. Адаптер и Claude продолжают работать, контекст сохранён.
-- `form_id` **известен**, TTL истёк → новая сессия (полный цикл).
-- Закрытие формы = новый `form_id` = новая сессия.
+## Фазы реализации
+
+1. **Hello flow** — готово, протестировано ✅
+2. **Claude streaming** — chat → Claude CLI → text_delta → канал (код написан, тест нужен)
+3. **Tool calls** — Claude → MCP → HTTP → Centrifugo → Chat EPF → result (код написан)
+4. **Auth, registration, polish** — QR flow, reconnect, disconnect, abort
+
+## Переход на API (будущее)
+
+1. `npm install @anthropic-ai/sdk`
+2. Переписать `claude.mjs`: SDK stream вместо spawn
+3. Tool calls в процессе (без MCP, без HTTP endpoint)
+4. Удалить `tools-mcp.mjs`

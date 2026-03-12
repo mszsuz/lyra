@@ -1,0 +1,48 @@
+{
+  "tools": [
+    {
+      "name": "v8_query",
+      "description": "Выполнить запрос на языке запросов 1С (ВЫБРАТЬ ... ИЗ ...). Это НЕ SQL! Результат ограничен 1000 строк.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string", "description": "Текст запроса на языке 1С" },
+          "params": { "type": "object", "description": "Параметры запроса (необязательно)" }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "v8_eval",
+      "description": "Вычислить выражение на языке 1С. Только выражения, НЕ процедуры. Пример: Строка(ТекущаяДата())",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "expression": { "type": "string", "description": "Выражение на встроенном языке 1С" }
+        },
+        "required": ["expression"]
+      }
+    },
+    {
+      "name": "v8_metadata",
+      "description": "Получить дерево/ветку метаданных конфигурации 1С. Без параметров — все метаданные.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Путь в дереве метаданных (пусто = корень)" }
+        }
+      }
+    },
+    {
+      "name": "v8_exec",
+      "description": "Выполнить блок кода на встроенном языке 1С (процедуры, циклы, условия, присваивания)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string", "description": "Код на встроенном языке 1С" }
+        },
+        "required": ["code"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "model": "sonnet",
+  "allowedTools": [
+    "mcp__1c__v8_query",
+    "mcp__1c__v8_eval",
+    "mcp__1c__v8_exec",
+    "mcp__1c__v8_metadata"
+  ]
+}
