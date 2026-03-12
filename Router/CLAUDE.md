@@ -64,6 +64,7 @@ Router/
 ├── users.mjs           — in-memory пользователи (MVP)
 ├── log.mjs             — структурированный лог в stderr
 ├── test-hello.mjs      — тест hello flow
+├── test-resume.mjs     — тест resume (kill Claude → respawn → память сохраняется)
 ├── package.json        — type: module, без зависимостей
 ├── profiles/default/
 │   ├── model.json          — модель, allowedTools
@@ -168,12 +169,33 @@ Claude stream-json → model-agnostic events:
 
 По `form_id` (UUID формы). Известный form_id + живая сессия → hello_ack status `reconnected`, новый chat_jwt, Claude продолжает.
 
+## Resume (восстановление Claude после краша)
+
+При падении/убийстве Claude CLI процесса сессия сохраняется. При следующем сообщении пользователя:
+
+1. Router видит `claudeProcess === null` → respawn с `--resume <sessionId>` (не `--session-id`)
+2. `--resume` восстанавливает историю диалога — Claude помнит контекст
+3. Сообщение отправляется в stdin **сразу** после spawn (не дожидаясь `init`)
+
+**Важно:** Claude CLI 2.1.74 не эмитит `init` до получения первого сообщения в stdin. В режиме resume `initialMessage` отправляется немедленно, иначе — дедлок.
+
+Сценарии resume:
+- **reconnect** (hello с известным form_id, Claude мёртв) → `spawnClaudeForSession(session, null, { resume: true })`
+- **handleChat** (Claude мёртв, пришло сообщение) → `spawnClaudeForSession(session, text, { resume: true })`
+- **onExit + pendingMessage** (Claude упал при pending) → `spawnClaudeForSession(session, text, { resume: true })`
+
+## Шаблонизация промптов
+
+Поддержка кириллицы в переменных через Unicode regex `[\p{L}\w]+` с флагом `/u`:
+- `{{ ИмяКонфигурации }}` → подстановка переменной
+- `{% Если Режим = "founder" Тогда %}...{% КонецЕсли; %}` — условные блоки
+
 ## Фазы реализации
 
 1. **Hello flow** ✅ — протестировано на реальном Чате
 2. **Claude streaming** ✅ — протестировано, UTF-8 streaming через StringDecoder
 3. **Tool calls** ✅ — протестировано, lyra_meta_list возвращает данные из базы 1С
-4. **Polish** ✅ — disconnect (kill Claude), reconnect (respawn), abort, TTL cleanup
+4. **Polish** ✅ — disconnect, reconnect, abort, TTL cleanup, resume
 
 ## Переход на API (будущее)
 

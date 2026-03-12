@@ -159,9 +159,9 @@ async function handleHello(data, clientUUID) {
         // No mobile_jwt/QR on reconnect
       });
 
-      // If active and Claude not running — respawn
+      // If active and Claude not running — respawn with resume
       if (existing.status === 'active' && !existing.claudeProcess) {
-        spawnClaudeForSession(existing);
+        spawnClaudeForSession(existing, null, { resume: true });
       }
       return;
     }
@@ -235,8 +235,8 @@ function handleChat(session, data) {
   }
 
   if (!session.claudeProcess) {
-    // Claude not running — spawn and send after ready
-    spawnClaudeForSession(session, text);
+    // Claude not running — respawn with resume and send after ready
+    spawnClaudeForSession(session, text, { resume: true });
   } else {
     if (session._sendChat) session._sendChat(text);
   }
@@ -325,7 +325,7 @@ async function handleMobileConfirm(data, clientUUID) {
 
 // --- Spawn Claude ---
 
-function spawnClaudeForSession(session, initialMessage) {
+function spawnClaudeForSession(session, initialMessage, { resume = false } = {}) {
   const { promptPath, mcpConfigPath } = writeTempFiles(session, profile, toolsPort);
 
   const { proc, sendChat, abort } = spawnClaude(session, {
@@ -333,6 +333,7 @@ function spawnClaudeForSession(session, initialMessage) {
     profile,
     mcpConfigPath,
     systemPromptPath: promptPath,
+    resume,
     onEvent: (event) => {
       // Forward universal protocol events to session channel
       centrifugo.apiPublish(session.channel, event).catch(err => {
@@ -348,24 +349,29 @@ function spawnClaudeForSession(session, initialMessage) {
       }
     },
     onReady: () => {
-      // Send initial message if Claude was spawned with one
-      if (initialMessage) {
+      // For non-resume spawns, send initial message after init
+      if (initialMessage && !resume) {
         sendChat(initialMessage);
       }
     },
     onExit: (code) => {
-      // If Claude exited while we have a pending message — respawn
+      // If Claude exited while we have a pending message — respawn with resume
       if (session.pendingMessage) {
         const text = session.pendingMessage;
         session.pendingMessage = null;
-        log.info(TAG, `Respawning Claude for pending message: ${text.slice(0, 100)}`);
-        spawnClaudeForSession(session, text);
+        log.info(TAG, `Respawning Claude (resume) for pending message: ${text.slice(0, 100)}`);
+        spawnClaudeForSession(session, text, { resume: true });
       }
     },
   });
 
   session._sendChat = sendChat;
   session._abort = abort;
+
+  // Resume mode: send message immediately — Claude CLI 2.1.74 triggers init on first stdin message
+  if (resume && initialMessage) {
+    sendChat(initialMessage);
+  }
 }
 
 // --- Graceful shutdown ---

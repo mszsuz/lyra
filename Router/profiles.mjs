@@ -59,22 +59,26 @@ export function loadProfile(profilePath) {
 
 export function renderSystemPrompt(template, session, profile) {
   // Переменные шаблона
+  // Определяем, подключена ли Vega к этой конфигурации
+  const vegaConnected = profile?.vegaConfig?.configs?.[session.configName] ? session.configName : '';
+
   const vars = {
     'ИмяКонфигурации': session.configName || '',
     'ВерсияКонфигурации': session.configVersion || '',
     'Компьютер': session.computer || '',
     'ИдентификаторКонфигурации': session.configId || '',
     'Режим': profile?.mode || 'user',
+    'VegaКонфигурация': vegaConnected,
   };
 
   let result = template;
 
-  // {{ Переменная }} → значение
-  result = result.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, name) => vars[name] ?? '');
+  // {{ Переменная }} → значение ([\p{L}\w]+ для поддержки кириллицы)
+  result = result.replace(/\{\{\s*([\p{L}\w]+)\s*\}\}/gu, (_, name) => vars[name] ?? '');
 
   // {% Если Переменная = "значение" Тогда %}...{% Иначе %}...{% КонецЕсли; %}
   // Обрабатываем итеративно от внутренних к внешним (без вложенных Если внутри body)
-  const ifPattern = /\{%\s*Если\s+(\w+)\s*(=|<>)\s*"([^"]*)"\s*Тогда\s*%\}((?:(?!\{%\s*Если)[\s\S])*?)\{%\s*КонецЕсли;\s*%\}/;
+  const ifPattern = /\{%\s*Если\s+([\p{L}\w]+)\s*(=|<>)\s*"([^"]*)"\s*Тогда\s*%\}((?:(?!\{%\s*Если)[\s\S])*?)\{%\s*КонецЕсли;\s*%\}/u;
   let safety = 20;
   while (ifPattern.test(result) && safety-- > 0) {
     result = result.replace(ifPattern, (_, varName, op, val, body) => {
@@ -108,19 +112,20 @@ export function buildMcpConfig(profile, session, toolsPort) {
   }
 
   // Vega MCP (HTTP, by config name)
-  if (profile.vegaConfig && session.configName) {
-    const vegaCfg = profile.vegaConfig;
-    const mapping = vegaCfg.configs || {};
-    const port = mapping[session.configName]?.port;
-    if (port) {
-      mcpServers['vega'] = {
-        type: 'http',
-        url: `http://localhost:${port}/mcp`,
-        headers: vegaCfg.headers || { 'X-API-Key': 'vega' },
-      };
-      log.info(TAG, `Vega MCP: ${session.configName} → port ${port}`);
-    }
-  }
+  // TODO: Claude CLI 2.1.74 зависает при подключении к HTTP MCP — отключено до выяснения
+  // if (profile.vegaConfig && session.configName) {
+  //   const vegaCfg = profile.vegaConfig;
+  //   const mapping = vegaCfg.configs || {};
+  //   const port = mapping[session.configName]?.port;
+  //   if (port) {
+  //     mcpServers['vega'] = {
+  //       type: 'http',
+  //       url: `http://localhost:${port}/mcp`,
+  //       headers: vegaCfg.headers || { 'X-API-Key': 'vega' },
+  //     };
+  //     log.info(TAG, `Vega MCP: ${session.configName} → port ${port}`);
+  //   }
+  // }
 
   return { mcpServers };
 }

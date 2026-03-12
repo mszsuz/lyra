@@ -8,7 +8,7 @@ import * as log from './log.mjs';
 
 const TAG = 'claude';
 
-export function spawnClaude(session, { claudePath, profile, mcpConfigPath, systemPromptPath, onEvent, onReady, onExit }) {
+export function spawnClaude(session, { claudePath, profile, mcpConfigPath, systemPromptPath, onEvent, onReady, onExit, resume = false }) {
   resetState();
 
   const args = [
@@ -18,7 +18,6 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
     '--output-format', 'stream-json',
     '--include-partial-messages',
     '--disable-slash-commands',
-    '--session-id', session.claudeSessionId,
     '--model', profile.model,
     '--system-prompt-file', systemPromptPath,
     '--mcp-config', mcpConfigPath,
@@ -27,9 +26,23 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
     '--settings', JSON.stringify({ disableAllHooks: true }),
   ];
 
-  // Add allowedTools if specified
-  if (profile.allowedTools.length > 0) {
-    args.push('--allowedTools', profile.allowedTools.join(','));
+  // First spawn: --session-id (create new), respawn: --resume (reuse existing)
+  if (resume) {
+    args.push('--resume', session.claudeSessionId);
+  } else {
+    args.push('--session-id', session.claudeSessionId);
+  }
+
+  // Add allowedTools — merge model.json + vega.json (if Vega connected for this session)
+  const allTools = [...profile.allowedTools];
+  if (profile.vegaConfig?.allowedTools && session.configName) {
+    const hasVega = profile.vegaConfig.configs?.[session.configName];
+    if (hasVega) {
+      allTools.push(...profile.vegaConfig.allowedTools);
+    }
+  }
+  if (allTools.length > 0) {
+    args.push('--allowedTools', allTools.join(','));
   }
 
   log.info(TAG, `Spawning Claude CLI for session ${session.sessionId}`);
