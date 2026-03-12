@@ -26,7 +26,7 @@
 1. **Hello flow** ✅ — connect → hello → hello_ack (auto_auth MVP) → spawn Claude CLI
 2. **Claude streaming** ✅ — chat → Claude CLI → text_delta/thinking_delta → канал сессии
 3. **Tool calls** ✅ — Claude → MCP → HTTP → Centrifugo → Chat EPF → tool_result → Claude
-4. **Polish** — disconnect, reconnect, abort, TTL cleanup (в работе)
+4. **Polish** ✅ — disconnect, reconnect, abort, TTL cleanup
 
 ## Архитектура
 
@@ -104,6 +104,8 @@ Push dispatcher в server.mjs маршрутизирует по каналу и 
 | session:* | chat | claude.sendChat(text) → stdout → protocol → apiPublish |
 | session:* | tool_result | resolve pending promise |
 | session:* | auth | verify, auth_ack |
+| session:* | abort | kill streaming, send assistant_end(aborted) |
+| session:* | disconnect | kill Claude process, пометить сессию disconnected |
 | mobile:lobby | register/confirm | MVP обработка |
 
 ### Server API (управление + отправка)
@@ -171,7 +173,7 @@ Claude stream-json → model-agnostic events:
 1. **Hello flow** ✅ — протестировано на реальном Чате
 2. **Claude streaming** ✅ — протестировано, UTF-8 streaming через StringDecoder
 3. **Tool calls** ✅ — протестировано, v8_metadata возвращает данные из базы 1С
-4. **Auth, registration, polish** — disconnect, reconnect, abort, TTL cleanup (в работе)
+4. **Polish** ✅ — disconnect (kill Claude), reconnect (respawn), abort, TTL cleanup
 
 ## Переход на API (будущее)
 
