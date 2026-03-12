@@ -27,6 +27,7 @@ export function loadProfile(profilePath) {
   if (existsSync(modelPath)) {
     const m = readJSON(modelPath);
     profile.model = m.model || profile.model;
+    profile.mode = m.mode || 'user';
     profile.allowedTools = m.allowedTools || [];
     log.info(TAG, `model: ${profile.model}, tools: ${profile.allowedTools.join(', ')}`);
   }
@@ -56,18 +57,37 @@ export function loadProfile(profilePath) {
   return profile;
 }
 
-export function renderSystemPrompt(template, session) {
-  let result = template;
-  result = result.replace(/\{\{\s*ИмяКонфигурации\s*\}\}/g, session.configName);
-  result = result.replace(/\{\{\s*ВерсияКонфигурации\s*\}\}/g, session.configVersion);
-  result = result.replace(/\{\{\s*Компьютер\s*\}\}/g, session.computer);
-  result = result.replace(/\{\{\s*ИдентификаторКонфигурации\s*\}\}/g, session.configId);
+export function renderSystemPrompt(template, session, profile) {
+  // Переменные шаблона
+  const vars = {
+    'ИмяКонфигурации': session.configName || '',
+    'ВерсияКонфигурации': session.configVersion || '',
+    'Компьютер': session.computer || '',
+    'ИдентификаторКонфигурации': session.configId || '',
+    'Режим': profile?.mode || 'user',
+  };
 
-  // {% Если ИдентификаторКонфигурации <> "" Тогда %} ... {% КонецЕсли; %}
-  result = result.replace(
-    /\{%\s*Если\s+ИдентификаторКонфигурации\s*<>\s*""\s*Тогда\s*%\}([\s\S]*?)\{%\s*КонецЕсли;\s*%\}/g,
-    (_, content) => session.configId ? content : '',
-  );
+  let result = template;
+
+  // {{ Переменная }} → значение
+  result = result.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, name) => vars[name] ?? '');
+
+  // {% Если Переменная = "значение" Тогда %}...{% Иначе %}...{% КонецЕсли; %}
+  // Обрабатываем итеративно от внутренних к внешним (без вложенных Если внутри body)
+  const ifPattern = /\{%\s*Если\s+(\w+)\s*(=|<>)\s*"([^"]*)"\s*Тогда\s*%\}((?:(?!\{%\s*Если)[\s\S])*?)\{%\s*КонецЕсли;\s*%\}/;
+  let safety = 20;
+  while (ifPattern.test(result) && safety-- > 0) {
+    result = result.replace(ifPattern, (_, varName, op, val, body) => {
+      const actual = vars[varName] ?? '';
+      const match = op === '=' ? actual === val : actual !== val;
+
+      const elseParts = body.split(/\{%\s*Иначе\s*%\}/);
+      const ifBlock = elseParts[0] || '';
+      const elseBlock = elseParts[1] || '';
+
+      return match ? ifBlock.trim() : elseBlock.trim();
+    });
+  }
 
   return result.trim();
 }
@@ -110,7 +130,7 @@ export function writeTempFiles(session, profile, toolsPort) {
   mkdirSync(tmpDir, { recursive: true });
 
   // System prompt
-  const promptContent = renderSystemPrompt(profile.systemPromptTemplate, session);
+  const promptContent = renderSystemPrompt(profile.systemPromptTemplate, session, profile);
   const promptPath = resolve(tmpDir, 'system-prompt.md');
   writeFileSync(promptPath, promptContent, 'utf-8');
 

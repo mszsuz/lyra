@@ -1,9 +1,11 @@
 {
   "model": "sonnet",
+  "mode": "founder",
   "allowedTools": [
-    "mcp__1c__v8_query",
-    "mcp__1c__v8_eval",
-    "mcp__1c__v8_exec",
-    "mcp__1c__v8_metadata"
+    "mcp__1c__lyra_data_query",
+    "mcp__1c__lyra_data_eval",
+    "mcp__1c__lyra_data_exec",
+    "mcp__1c__lyra_meta_list",
+    "mcp__1c__lyra_nav_resolve"
   ]
 }

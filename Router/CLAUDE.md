@@ -41,7 +41,7 @@ Mobile app ─────►    :11000     │    │                 ↕ MCP
 ### Как работают 1C-инструменты
 
 1. Claude CLI спавнит `tools-mcp.mjs` (MCP server, stdio) через `--mcp-config`
-2. Claude вызывает `v8_query` → `tools-mcp.mjs` получает MCP request
+2. Claude вызывает `lyra_data_query` → `tools-mcp.mjs` получает MCP request
 3. `tools-mcp.mjs` отправляет HTTP POST на Router `localhost:<port>/tool-call`
 4. Router публикует `tool_call` в Centrifugo → Chat EPF выполняет → `tool_result` приходит обратно
 5. Router отвечает на HTTP → `tools-mcp.mjs` возвращает MCP response → Claude продолжает
@@ -57,7 +57,7 @@ Router/
 ├── sessions.mjs        — Map сессий, индекс по form_id, TTL cleanup
 ├── jwt.mjs             — HMAC SHA-256 (node:crypto)
 ├── claude.mjs          — spawn Claude CLI, stream-json → protocol.mjs
-├── tools-mcp.mjs       — MCP server (stdio), спавнится Claude CLI для v8_* tools
+├── tools-mcp.mjs       — MCP server (stdio), спавнится Claude CLI для lyra_* tools
 ├── tools.mjs           — HTTP endpoint для tool_call/tool_result
 ├── protocol.mjs        — stream-json → универсальный протокол
 ├── profiles.mjs        — загрузка профилей, шаблонизация промптов, MCP config
@@ -68,7 +68,7 @@ Router/
 ├── profiles/default/
 │   ├── model.json          — модель, allowedTools
 │   ├── system-prompt.md    — шаблон промпта ({{ }} переменные)
-│   ├── tools.json          — описания v8_* инструментов (input_schema)
+│   ├── tools.json          — описания lyra_* инструментов (input_schema)
 │   └── vega.json           — маппинг конфигураций → Vega порты
 ├── CLAUDE.md           — этот файл
 ├── ЕХТ_Лира_Роутер/    — симлинк на расширение 1С (историческое)
@@ -142,7 +142,7 @@ Claude stream-json → model-agnostic events:
 
 - **model.json** — модель (`sonnet`), `allowedTools` (MCP tool names)
 - **system-prompt.md** — шаблон с `{{ ИмяКонфигурации }}`, `{% Если %}` блоками
-- **tools.json** — описания v8_* инструментов для MCP server
+- **tools.json** — описания lyra_* инструментов для MCP server
 - **vega.json** — маппинг config_name → Vega MCP port
 
 ## MCP Config (генерируется для каждой сессии)
@@ -172,7 +172,7 @@ Claude stream-json → model-agnostic events:
 
 1. **Hello flow** ✅ — протестировано на реальном Чате
 2. **Claude streaming** ✅ — протестировано, UTF-8 streaming через StringDecoder
-3. **Tool calls** ✅ — протестировано, v8_metadata возвращает данные из базы 1С
+3. **Tool calls** ✅ — протестировано, lyra_meta_list возвращает данные из базы 1С
 4. **Polish** ✅ — disconnect (kill Claude), reconnect (respawn), abort, TTL cleanup
 
 ## Переход на API (будущее)

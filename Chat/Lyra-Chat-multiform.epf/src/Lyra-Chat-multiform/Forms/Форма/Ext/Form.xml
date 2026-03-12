@@ -99,6 +99,7 @@
 													<v8:content>Группа сессия</v8:content>
 												</v8:item>
 											</ToolTip>
+											<Visible>false</Visible>
 											<Group>AlwaysHorizontal</Group>
 											<Representation>None</Representation>
 											<ShowTitle>false</ShowTitle>
@@ -146,6 +147,7 @@
 												<Button name="КомандаПодключиться" id="76">
 													<Type>UsualButton</Type>
 													<CommandName>Form.Command.Чат1_Подключиться</CommandName>
+													<Visible>false</Visible>
 													<ExtendedTooltip name="КомандаПодключитьсяРасширеннаяПодсказка" id="77"/>
 												</Button>
 											</ChildItems>

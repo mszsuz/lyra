@@ -1,19 +1,19 @@
 {
   "tools": [
     {
-      "name": "v8_query",
+      "name": "lyra_data_query",
       "description": "Выполнить запрос на языке запросов 1С (ВЫБРАТЬ ... ИЗ ...). Это НЕ SQL! Результат ограничен 1000 строк.",
       "input_schema": {
         "type": "object",
         "properties": {
           "query": { "type": "string", "description": "Текст запроса на языке 1С" },
-          "params": { "type": "object", "description": "Параметры запроса (необязательно)" }
+          "params": { "type": "object", "description": "Параметры запроса (&Параметр). Для ссылочных значений передавай объект _ref из результатов предыдущего запроса: {\"_ref\": \"СправочникСсылка.Контрагенты\", \"id\": \"uuid\", \"title\": \"...\"}" }
         },
         "required": ["query"]
       }
     },
     {
-      "name": "v8_eval",
+      "name": "lyra_data_eval",
       "description": "Вычислить выражение на языке 1С. Только выражения, НЕ процедуры. Пример: Строка(ТекущаяДата())",
       "input_schema": {
         "type": "object",
@@ -24,7 +24,7 @@
       }
     },
     {
-      "name": "v8_metadata",
+      "name": "lyra_meta_list",
       "description": "Получить дерево/ветку метаданных конфигурации 1С. Без параметров — все метаданные.",
       "input_schema": {
         "type": "object",
@@ -34,7 +34,7 @@
       }
     },
     {
-      "name": "v8_exec",
+      "name": "lyra_data_exec",
       "description": "Выполнить блок кода на встроенном языке 1С (процедуры, циклы, условия, присваивания)",
       "input_schema": {
         "type": "object",
@@ -42,6 +42,19 @@
           "code": { "type": "string", "description": "Код на встроенном языке 1С" }
         },
         "required": ["code"]
+      }
+    },
+    {
+      "name": "lyra_nav_resolve",
+      "description": "Получить навигационную ссылку на объект базы 1С. Ссылка кликабельна — откроет объект в программе пользователя.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "description": "Тип объекта метаданных (Справочник, Документ, и т.д.)" },
+          "name": { "type": "string", "description": "Имя объекта метаданных (Контрагенты, РеализацияТоваровУслуг, и т.д.)" },
+          "ref": { "type": "string", "description": "Ссылка на конкретный объект (UUID или строковое представление). Если не указан — вернёт ссылку на список" }
+        },
+        "required": ["type", "name"]
       }
     }
   ]

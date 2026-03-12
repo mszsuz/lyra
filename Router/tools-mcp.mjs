@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// MCP server for v8_* tools — spawned by Claude CLI via --mcp-config
+// MCP server for lyra_* tools — spawned by Claude CLI via --mcp-config
 //
 // Reads JSON-RPC from stdin, sends tool calls to Router via HTTP,
 // returns results to Claude via stdout.

@@ -11,8 +11,23 @@ import { spawnClaude } from './claude.mjs';
 import { createToolServer, handleToolResult } from './tools.mjs';
 import { verifyAuth, checkBalance } from './users.mjs';
 import * as log from './log.mjs';
+import { writeFileSync, unlinkSync } from 'node:fs';
 
 const TAG = 'server';
+
+// --- PID file ---
+
+const PID_FILE = new URL('./router.pid', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1');
+
+function writePidFile() {
+  try { writeFileSync(PID_FILE, String(process.pid)); } catch {}
+}
+
+function removePidFile() {
+  try { unlinkSync(PID_FILE); } catch {}
+}
+
+writePidFile();
 
 // --- Load config and profile ---
 
@@ -278,16 +293,11 @@ function handleAbort(session) {
 function handleDisconnect(session) {
   log.info(TAG, `disconnect: session=${session.sessionId}`);
 
-  // Kill Claude process
-  if (session.claudeProcess) {
-    try { session.claudeProcess.kill(); } catch {}
-    session.claudeProcess = null;
-  }
+  // Claude процесс НЕ убиваем — при переподключении используем тот же процесс.
+  // Убьётся при TTL expire или при graceful shutdown.
 
   session.streaming = false;
   session.status = 'disconnected';
-  session._sendChat = null;
-  session._abort = null;
 
   // Не удаляем сессию — клиент может переподключиться по form_id (TTL 30 мин)
 }
@@ -365,6 +375,7 @@ function shutdown() {
   sessions.destroy();
   centrifugo.close();
   toolServer.close();
+  removePidFile();
   process.exit(0);
 }
 
