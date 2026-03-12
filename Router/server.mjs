@@ -171,28 +171,24 @@ async function handleHello(data, clientUUID) {
     log.error(TAG, `Failed to subscribe router to ${session.channel}: ${err.message}`);
   }
 
-  // Publish hello_ack
+  // MVP: auto-auth — include auth status directly in hello_ack
+  // (In production, auth_ack comes later after mobile QR scan)
+  session.status = 'active';
+  session.userId = 'mvp-user';
+
+  // Publish hello_ack with auto_auth flag
   await centrifugo.apiPublish(session.channel, {
     type: 'hello_ack',
     session_id: session.sessionId,
     status: 'new',
     chat_jwt: chatJwt,
     mobile_jwt: mobileJwt,
+    auto_auth: true,
   });
 
-  log.info(TAG, `hello_ack sent for session ${session.sessionId}`);
+  log.info(TAG, `hello_ack sent for session ${session.sessionId} (auto_auth=true)`);
 
-  // MVP: auto-auth (skip QR flow for now)
-  session.status = 'active';
-  session.userId = 'mvp-user';
-
-  await centrifugo.apiPublish(session.channel, {
-    type: 'auth_ack',
-    session_id: session.sessionId,
-    status: 'ok',
-  });
-
-  // Spawn Claude CLI
+  // Spawn Claude CLI immediately (auth already done)
   spawnClaudeForSession(session);
 }
 

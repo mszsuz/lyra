@@ -2,6 +2,7 @@
 // Spawns Claude CLI as child process, parses stream-json stdout
 
 import { spawn } from 'node:child_process';
+import { StringDecoder } from 'node:string_decoder';
 import { transformClaudeEvent, resetState } from './protocol.mjs';
 import * as log from './log.mjs';
 
@@ -48,10 +49,11 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
 
   let ready = false;
 
-  // Parse stdout NDJSON
+  // Parse stdout NDJSON (StringDecoder handles split multi-byte UTF-8 chars)
+  const decoder = new StringDecoder('utf8');
   let buf = '';
   proc.stdout.on('data', (chunk) => {
-    buf += chunk;
+    buf += decoder.write(chunk);
     const lines = buf.split('\n');
     buf = lines.pop(); // keep incomplete last line
 
@@ -83,8 +85,9 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
     }
   });
 
+  const stderrDecoder = new StringDecoder('utf8');
   proc.stderr.on('data', (chunk) => {
-    const text = chunk.toString().trim();
+    const text = stderrDecoder.write(chunk).trim();
     if (text) log.debug(TAG, `stderr: ${text.slice(0, 300)}`);
   });
 

@@ -21,9 +21,12 @@
 
 ## Статус
 
-**Фаза 1 реализована и протестирована: Hello flow.**
+**Фазы 1–3 реализованы и протестированы на реальном Чате (1С EPF).**
 
-Работает: connect → auto-subscribe lobbies → hello → создание сессии → JWT → apiSubscribe → hello_ack → auto-auth (MVP) → auth_ack → spawn Claude CLI.
+1. **Hello flow** ✅ — connect → hello → hello_ack (auto_auth MVP) → spawn Claude CLI
+2. **Claude streaming** ✅ — chat → Claude CLI → text_delta/thinking_delta → канал сессии
+3. **Tool calls** ✅ — Claude → MCP → HTTP → Centrifugo → Chat EPF → tool_result → Claude
+4. **Polish** — disconnect, reconnect, abort, TTL cleanup (в работе)
 
 ## Архитектура
 
@@ -165,10 +168,10 @@ Claude stream-json → model-agnostic events:
 
 ## Фазы реализации
 
-1. **Hello flow** — готово, протестировано ✅
-2. **Claude streaming** — chat → Claude CLI → text_delta → канал (код написан, тест нужен)
-3. **Tool calls** — Claude → MCP → HTTP → Centrifugo → Chat EPF → result (код написан)
-4. **Auth, registration, polish** — QR flow, reconnect, disconnect, abort
+1. **Hello flow** ✅ — протестировано на реальном Чате
+2. **Claude streaming** ✅ — протестировано, UTF-8 streaming через StringDecoder
+3. **Tool calls** ✅ — протестировано, v8_metadata возвращает данные из базы 1С
+4. **Auth, registration, polish** — disconnect, reconnect, abort, TTL cleanup (в работе)
 
 ## Переход на API (будущее)
 
