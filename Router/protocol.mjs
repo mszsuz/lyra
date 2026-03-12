@@ -63,23 +63,8 @@ export function transformClaudeEvent(line) {
     return { type: 'assistant_end', text };
   }
 
-  // assistant message (full) — can contain tool_use
-  if (ev.type === 'assistant') {
-    const content = ev.message?.content;
-    if (Array.isArray(content)) {
-      for (const block of content) {
-        if (block.type === 'tool_use') {
-          return {
-            type: 'tool_call',
-            tool_use_id: block.id,
-            tool: block.name,
-            params: block.input,
-          };
-        }
-      }
-    }
-    return null; // text already streamed via text_delta
-  }
+  // assistant message — informational only (tool_use handled by MCP internally)
+  // Don't emit tool_call here — real tool_calls go through tools-mcp.mjs → tools.mjs
 
   return null;
 }
