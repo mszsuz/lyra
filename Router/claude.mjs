@@ -7,7 +7,7 @@ import * as log from './log.mjs';
 
 const TAG = 'claude';
 
-export function spawnClaude(session, { claudePath, profile, mcpConfigPath, systemPromptPath, onEvent }) {
+export function spawnClaude(session, { claudePath, profile, mcpConfigPath, systemPromptPath, onEvent, onReady, onExit }) {
   resetState();
 
   const args = [
@@ -43,7 +43,10 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
   });
 
   session.claudeProcess = proc;
+  session.streaming = false;
   log.info(TAG, `Claude PID=${proc.pid}`);
+
+  let ready = false;
 
   // Parse stdout NDJSON
   let buf = '';
@@ -56,8 +59,25 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
       if (!line.trim()) continue;
       log.debug(TAG, `stdout: ${line.slice(0, 200)}`);
 
+      // Detect init event — Claude is ready
+      try {
+        const raw = JSON.parse(line);
+        if (raw.type === 'system' && raw.subtype === 'init' && !ready) {
+          ready = true;
+          log.info(TAG, `Claude ready for session ${session.sessionId}`);
+          if (onReady) onReady();
+        }
+      } catch {}
+
       const event = transformClaudeEvent(line);
       if (event) {
+        // Track streaming state
+        if (event.type === 'text_delta' || event.type === 'thinking_start') {
+          session.streaming = true;
+        }
+        if (event.type === 'assistant_end') {
+          session.streaming = false;
+        }
         onEvent(event);
       }
     }
@@ -71,6 +91,8 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
   proc.on('exit', (code) => {
     log.info(TAG, `Claude exited, code=${code}, session=${session.sessionId}`);
     session.claudeProcess = null;
+    session.streaming = false;
+    if (onExit) onExit(code);
   });
 
   function sendChat(text) {
@@ -80,11 +102,19 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
         message: { role: 'user', content: text },
       });
       proc.stdin.write(msg + '\n');
+      session.streaming = true;
       log.info(TAG, `Sent chat: ${text.slice(0, 100)}`);
     } else {
       log.warn(TAG, 'Claude stdin not writable');
     }
   }
 
-  return { proc, sendChat };
+  function abort() {
+    if (proc && !proc.killed) {
+      log.info(TAG, `Aborting Claude (SIGINT) for session ${session.sessionId}`);
+      proc.kill('SIGINT');
+    }
+  }
+
+  return { proc, sendChat, abort };
 }

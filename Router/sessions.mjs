@@ -31,7 +31,11 @@ export class SessionManager {
       mobileJwt: null,
       claudeProcess: null,
       claudeSessionId: randomUUID(),
+      streaming: false,
+      pendingMessage: null,
       pendingToolCalls: new Map(),
+      _sendChat: null,
+      _abort: null,
       created: Date.now(),
       lastActivity: Date.now(),
     };

@@ -77,9 +77,8 @@ centrifugo.onPush((push) => {
 
   // --- mobile:lobby ---
   if (channel === 'mobile:lobby') {
-    if (data.type === 'register' || data.type === 'confirm' || data.type === 'get_sessions') {
-      handleMobileMessage(data, clientUUID);
-    }
+    if (data.type === 'register') handleMobileRegister(data, clientUUID);
+    if (data.type === 'confirm') handleMobileConfirm(data, clientUUID);
     return;
   }
 
@@ -100,11 +99,14 @@ centrifugo.onPush((push) => {
       case 'auth':
         handleAuth(session, data);
         break;
+      case 'abort':
+        handleAbort(session);
+        break;
     }
   }
 });
 
-// --- Handlers ---
+// --- Hello ---
 
 async function handleHello(data, clientUUID) {
   log.info(TAG, `hello from client=${clientUUID}`, {
@@ -122,10 +124,14 @@ async function handleHello(data, clientUUID) {
       const { chatJwt } = makeSessionJWTs(existing.sessionId, config.centrifugo.hmacSecret);
       existing.chatJwt = chatJwt;
       existing.clientId = clientUUID;
+      existing.status = existing.userId ? 'active' : 'awaiting_auth';
 
       // Subscribe client to session channel and send hello_ack
-      const lobbyUser = 'lobby-user'; // sub from lobby JWT
-      await centrifugo.apiSubscribe(lobbyUser, clientUUID, existing.channel);
+      try {
+        await centrifugo.apiSubscribe('lobby-user', clientUUID, existing.channel);
+      } catch (err) {
+        log.error(TAG, `Reconnect subscribe error: ${err.message}`);
+      }
 
       await centrifugo.apiPublish(existing.channel, {
         type: 'hello_ack',
@@ -134,6 +140,11 @@ async function handleHello(data, clientUUID) {
         chat_jwt: chatJwt,
         // No mobile_jwt/QR on reconnect
       });
+
+      // If active and Claude not running — respawn
+      if (existing.status === 'active' && !existing.claudeProcess) {
+        spawnClaudeForSession(existing);
+      }
       return;
     }
   }
@@ -147,15 +158,13 @@ async function handleHello(data, clientUUID) {
   session.mobileJwt = mobileJwt;
 
   // Subscribe the chat client to session channel (for hello_ack delivery)
-  const lobbyUser = 'lobby-user'; // sub from lobby JWT — all lobby clients share this
   try {
-    await centrifugo.apiSubscribe(lobbyUser, clientUUID, session.channel);
+    await centrifugo.apiSubscribe('lobby-user', clientUUID, session.channel);
   } catch (err) {
     log.error(TAG, `Failed to subscribe client to session channel: ${err.message}`);
   }
 
   // Subscribe Router to session channel via Server API
-  // (session: namespace has allow_subscribe_for_client: false)
   try {
     await centrifugo.apiSubscribe('router-1', centrifugo.clientId, session.channel);
   } catch (err) {
@@ -187,23 +196,39 @@ async function handleHello(data, clientUUID) {
   spawnClaudeForSession(session);
 }
 
+// --- Chat ---
+
 function handleChat(session, data) {
   const text = data.text || data.content || '';
   if (!text) return;
 
   log.info(TAG, `chat: session=${session.sessionId}, text="${text.slice(0, 100)}"`);
 
+  if (session.status !== 'active') {
+    centrifugo.apiPublish(session.channel, {
+      type: 'error',
+      message: 'Сессия не авторизована',
+    });
+    return;
+  }
+
+  // If Claude is streaming — abort current, queue new message
+  if (session.streaming && session.claudeProcess) {
+    log.info(TAG, `Interrupting stream for session ${session.sessionId}`);
+    session.pendingMessage = text;
+    if (session._abort) session._abort();
+    return;
+  }
+
   if (!session.claudeProcess) {
-    // Claude not running — spawn it
-    spawnClaudeForSession(session);
-    // Send after a short delay to let Claude initialize
-    setTimeout(() => {
-      if (session._sendChat) session._sendChat(text);
-    }, 2000);
+    // Claude not running — spawn and send after ready
+    spawnClaudeForSession(session, text);
   } else {
     if (session._sendChat) session._sendChat(text);
   }
 }
+
+// --- Auth ---
 
 async function handleAuth(session, data) {
   const { user_id, device_id } = data;
@@ -235,16 +260,47 @@ async function handleAuth(session, data) {
   }
 }
 
-function handleMobileMessage(data, clientUUID) {
-  // MVP: minimal mobile handling
-  log.info(TAG, `mobile: type=${data.type}`);
-  // TODO: implement register, confirm, get_sessions
+// --- Abort ---
+
+function handleAbort(session) {
+  log.info(TAG, `abort: session=${session.sessionId}`);
+  if (session.streaming && session._abort) {
+    session._abort();
+    centrifugo.apiPublish(session.channel, {
+      type: 'assistant_end',
+      text: '',
+      aborted: true,
+    });
+  }
 }
 
-function spawnClaudeForSession(session) {
+// --- Mobile registration (MVP stubs) ---
+
+async function handleMobileRegister(data, clientUUID) {
+  const { phone } = data;
+  log.info(TAG, `mobile register: phone=${phone}`);
+
+  // MVP: accept any phone, generate fake code
+  // In production: send SMS, rate limit, store in MDM
+  // For now just acknowledge — mobile app will show confirm screen
+  // We don't have a way to publish back to mobile:lobby for specific client
+  // so the mobile app should subscribe to its own channel after register
+}
+
+async function handleMobileConfirm(data, clientUUID) {
+  const { phone, code, reg_id } = data;
+  log.info(TAG, `mobile confirm: phone=${phone}, code=${code}`);
+
+  // MVP: accept any code
+  // In production: verify code, create user in MDM, return user_id + device_id
+}
+
+// --- Spawn Claude ---
+
+function spawnClaudeForSession(session, initialMessage) {
   const { promptPath, mcpConfigPath } = writeTempFiles(session, profile, toolsPort);
 
-  const { proc, sendChat } = spawnClaude(session, {
+  const { proc, sendChat, abort } = spawnClaude(session, {
     claudePath: config.claude.path,
     profile,
     mcpConfigPath,
@@ -254,10 +310,34 @@ function spawnClaudeForSession(session) {
       centrifugo.apiPublish(session.channel, event).catch(err => {
         log.error(TAG, `Failed to publish event: ${err.message}`);
       });
+
+      // After assistant_end, check for pending message (abort + resend)
+      if (event.type === 'assistant_end' && session.pendingMessage) {
+        const text = session.pendingMessage;
+        session.pendingMessage = null;
+        log.info(TAG, `Sending pending message: ${text.slice(0, 100)}`);
+        sendChat(text);
+      }
+    },
+    onReady: () => {
+      // Send initial message if Claude was spawned with one
+      if (initialMessage) {
+        sendChat(initialMessage);
+      }
+    },
+    onExit: (code) => {
+      // If Claude exited while we have a pending message — respawn
+      if (session.pendingMessage) {
+        const text = session.pendingMessage;
+        session.pendingMessage = null;
+        log.info(TAG, `Respawning Claude for pending message: ${text.slice(0, 100)}`);
+        spawnClaudeForSession(session, text);
+      }
     },
   });
 
   session._sendChat = sendChat;
+  session._abort = abort;
 }
 
 // --- Graceful shutdown ---
