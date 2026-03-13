@@ -1,0 +1,42 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'>
+  <g fill='none' stroke='#555566' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' opacity='0.3'>
+    <polygon points='25,12 18,24 32,24' transform='rotate(-10,25,18)'/>
+    <polygon points='130,35 120,52 140,52' transform='rotate(15,130,43)'/>
+    <polygon points='75,95 65,112 85,112' transform='rotate(-5,75,103)'/>
+    <polygon points='170,110 160,127 180,127' transform='rotate(20,170,118)'/>
+    <polygon points='30,160 20,177 40,177' transform='rotate(-15,30,168)'/>
+    <rect x='85' y='8' width='12' height='12' transform='rotate(15,91,14)'/>
+    <rect x='165' y='60' width='12' height='12' transform='rotate(-10,171,66)'/>
+    <rect x='45' y='70' width='10' height='10' transform='rotate(8,50,75)'/>
+    <rect x='140' y='170' width='12' height='12' transform='rotate(-20,146,176)'/>
+    <circle cx='60' cy='20' r='6' stroke-width='2'/>
+    <circle cx='155' cy='15' r='4'/>
+    <circle cx='10' cy='55' r='5' stroke-width='2'/>
+    <circle cx='110' cy='65' r='6' stroke-width='2'/>
+    <circle cx='50' cy='130' r='5' stroke-width='2'/>
+    <circle cx='160' cy='140' r='4'/>
+    <circle cx='95' cy='175' r='6' stroke-width='2'/>
+    <line x1='40' y1='40' x2='60' y2='36' stroke-width='2.5'/>
+    <line x1='140' y1='82' x2='158' y2='78' stroke-width='2.5'/>
+    <line x1='8' y1='140' x2='26' y2='136' stroke-width='2.5'/>
+    <line x1='100' y1='125' x2='118' y2='121' stroke-width='2.5'/>
+    <line x1='170' y1='30' x2='188' y2='26' stroke-width='2.5'/>
+    <line x1='80' y1='55' x2='92' y2='52' stroke-width='2'/>
+    <line x1='55' y1='185' x2='73' y2='181' stroke-width='2.5'/>
+    <polyline points='5,20 10,12 15,20 20,12 25,20' transform='rotate(-5,15,16)'/>
+    <polyline points='95,80 100,72 105,80 110,72 115,80' transform='rotate(10,105,76)'/>
+    <polyline points='55,105 60,97 65,105 70,97 75,105' transform='rotate(-8,65,101)'/>
+    <polyline points='150,50 155,42 160,50 165,42 170,50' transform='rotate(5,160,46)'/>
+    <polyline points='115,180 120,172 125,180 130,172 135,180' transform='rotate(-12,125,176)'/>
+    <path d='M30,90 a8,8 0 0,1 12,0'/>
+    <path d='M175,160 a8,8 0 0,1 12,0'/>
+    <path d='M120,10 a6,6 0 0,1 10,0'/>
+    <g transform='translate(5,75) rotate(15)'><line x1='0' y1='0' x2='6' y2='6'/><line x1='6' y1='0' x2='0' y2='6'/></g>
+    <g transform='translate(130,100) rotate(-10)'><line x1='0' y1='0' x2='6' y2='6'/><line x1='6' y1='0' x2='0' y2='6'/></g>
+    <g transform='translate(190,175) rotate(5)'><line x1='0' y1='0' x2='6' y2='6'/><line x1='6' y1='0' x2='0' y2='6'/></g>
+    <path d='M0,0 c-4,4 -4,8 0,12 c-4,4 -4,8 0,12' transform='translate(35,48) rotate(5)'/>
+    <path d='M0,0 c4,4 4,8 0,12 c4,4 4,8 0,12' transform='translate(190,45) rotate(-8)'/>
+    <path d='M0,0 c-4,4 -4,8 0,12 c-4,4 -4,8 0,12' transform='translate(85,140) rotate(10)'/>
+    <path d='M0,0 c4,4 4,8 0,12 c4,4 4,8 0,12' transform='translate(15,185) rotate(-5)'/>
+  </g>
+</svg>
