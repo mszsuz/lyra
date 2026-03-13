@@ -9,6 +9,15 @@ export function resetState() {
   _inThinking = false;
 }
 
+// Strip HTML tags from text — Claude sometimes generates <h2 id="...">, <div>, <details> etc.
+// despite system prompt prohibition. Clean at protocol level as a safety net.
+const HTML_TAG_RE = /<\/?[a-zA-Z][^>]*>/g;
+
+export function stripHtmlTags(text) {
+  if (!text || typeof text !== 'string') return text;
+  return text.replace(HTML_TAG_RE, '');
+}
+
 export function transformClaudeEvent(line) {
   if (!line.trim()) return null;
 
