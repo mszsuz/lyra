@@ -13,9 +13,16 @@ export function resetState() {
 // despite system prompt prohibition. Clean at protocol level as a safety net.
 const HTML_TAG_RE = /<\/?[a-zA-Z][^>]*>/g;
 
-export function stripHtmlTags(text) {
+// Convert markdown headings (## Heading) to bold (**Heading**).
+// Markdown renderer generates <h2 id="slug"> which 1C HTML field can't handle —
+// shows raw id attribute as text. Bold is safe and looks good.
+const MD_HEADING_RE = /^(#{1,6})\s+(.+)$/gm;
+
+export function sanitizeText(text) {
   if (!text || typeof text !== 'string') return text;
-  return text.replace(HTML_TAG_RE, '');
+  return text
+    .replace(MD_HEADING_RE, '**$2**')
+    .replace(HTML_TAG_RE, '');
 }
 
 export function transformClaudeEvent(line) {

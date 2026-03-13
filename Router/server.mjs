@@ -10,7 +10,7 @@ import { loadProfile, writeTempFiles } from './profiles.mjs';
 import { spawnClaude } from './claude.mjs';
 import { createToolServer, handleToolResult } from './tools.mjs';
 import { verifyAuth, checkBalance } from './users.mjs';
-import { stripHtmlTags } from './protocol.mjs';
+import { sanitizeText } from './protocol.mjs';
 import * as log from './log.mjs';
 import { writeFileSync, unlinkSync } from 'node:fs';
 
@@ -346,9 +346,9 @@ function spawnClaudeForSession(session, initialMessage, { resume = false } = {})
       if (event.type === 'thinking_delta') return;
       if (event.type === 'text_delta') return;
 
-      // Strip HTML tags from assistant_end text (Claude sometimes ignores prompt prohibition)
+      // Sanitize assistant_end text: markdown headings → bold, strip HTML tags
       if (event.type === 'assistant_end' && event.text) {
-        event.text = stripHtmlTags(event.text);
+        event.text = sanitizeText(event.text);
       }
 
       // Forward universal protocol events to session channel

@@ -2,8 +2,10 @@
   "http_server": {
     "port": "11000"
   },
+  "websocket": {
+    "message_size_limit": 2097152
+  },
   "client": {
-    "max_message_size": 524288,
     "ping_interval": "90s",
     "pong_timeout": "60s",
     "token": {
