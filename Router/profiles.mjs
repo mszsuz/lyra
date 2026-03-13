@@ -118,20 +118,19 @@ export function buildMcpConfig(profile, session, toolsPort) {
   };
 
   // Vega MCP (HTTP, by config name)
-  // TODO: Claude CLI 2.1.74 зависает при подключении к HTTP MCP — отключено до выяснения
-  // if (profile.vegaConfig && session.configName) {
-  //   const vegaCfg = profile.vegaConfig;
-  //   const mapping = vegaCfg.configs || {};
-  //   const port = mapping[session.configName]?.port;
-  //   if (port) {
-  //     mcpServers['vega'] = {
-  //       type: 'http',
-  //       url: `http://localhost:${port}/mcp`,
-  //       headers: vegaCfg.headers || { 'X-API-Key': 'vega' },
-  //     };
-  //     log.info(TAG, `Vega MCP: ${session.configName} → port ${port}`);
-  //   }
-  // }
+  if (profile.vegaConfig && session.configName) {
+    const vegaCfg = profile.vegaConfig;
+    const mapping = vegaCfg.configs || {};
+    const port = mapping[session.configName]?.port;
+    if (port) {
+      mcpServers['vega'] = {
+        type: 'http',
+        url: `http://localhost:${port}/mcp`,
+        headers: vegaCfg.headers || { 'X-API-Key': 'vega' },
+      };
+      log.info(TAG, `Vega MCP: ${session.configName} → port ${port}`);
+    }
+  }
 
   return { mcpServers };
 }

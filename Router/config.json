@@ -5,10 +5,10 @@
   },
   "claude": {
     "path": "claude",
-    "model": "sonnet"
+    "model": "opus"
   },
   "toolsPort": 0,
   "profilePath": "./profiles/default",
-  "logLevel": "info",
+  "logLevel": "debug",
   "sessionTTL": 1800000
 }

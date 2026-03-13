@@ -62,7 +62,7 @@ Router/
 ├── protocol.mjs        — stream-json → универсальный протокол
 ├── profiles.mjs        — загрузка профилей, шаблонизация промптов, MCP config
 ├── users.mjs           — in-memory пользователи (MVP)
-├── log.mjs             — структурированный лог в stderr
+├── log.mjs             — структурированный лог в stderr + router.log
 ├── test-hello.mjs      — тест hello flow
 ├── test-resume.mjs     — тест resume (kill Claude → respawn → память сохраняется)
 ├── package.json        — type: module, без зависимостей
@@ -196,12 +196,35 @@ Claude stream-json → model-agnostic events:
 - `{{ ИмяКонфигурации }}` → подстановка переменной
 - `{% Если Режим = "founder" Тогда %}...{% КонецЕсли; %}` — условные блоки
 
+## Логирование и хронометраж
+
+`log.mjs` пишет в stderr + файл `router.log` (через `appendFileSync`, обходит буферизацию Node.js при перенаправлении stderr).
+
+Тайминги (метки `⏱` в логах):
+- `chat RECEIVED` — момент получения сообщения от пользователя
+- `TTFT` (Time To First Token) — от отправки в Claude до первого токена
+- `MCP tool_use` — вызов MCP-инструмента (Vega, mcp-1c-docs) через Claude CLI
+- `tool_call START/END` — вызов lyra_* инструмента через Centrifugo → Chat EPF (с длительностью в мс)
+- `Total response` — полное время ответа Claude
+- `SUMMARY` — total от chat received до assistant_end
+
+## Фильтрация событий
+
+- `thinking_delta` — **не передаётся** клиенту. Чат показывает "Думаю...", текст размышлений не нужен. Фильтрация предотвращает disconnect 3012 (no pong) — клиент не успевал обрабатывать поток thinking при длинных ответах.
+
+## Vega MCP
+
+Vega подключается к Claude CLI как HTTP MCP server (через `--mcp-config`). Маппинг конфигураций → порты в `profiles/default/vega.json`. Роутер добавляет Vega в MCP config по `config_name` из hello.
+
+Инструменты Vega: `search_metadata`, `search_metadata_by_description`, `search_code` (семантический поиск по коду конфигурации).
+
 ## Фазы реализации
 
 1. **Hello flow** ✅ — протестировано на реальном Чате
 2. **Claude streaming** ✅ — протестировано, UTF-8 streaming через StringDecoder
 3. **Tool calls** ✅ — протестировано, lyra_meta_list возвращает данные из базы 1С
 4. **Polish** ✅ — disconnect, reconnect, abort, TTL cleanup, resume
+5. **Vega + хронометраж** ✅ — Vega MCP подключён, логирование с таймингами
 
 ## Переход на API (будущее)
 

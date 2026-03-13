@@ -1,5 +1,5 @@
 {
-  "model": "sonnet",
+  "model": "opus",
   "mode": "founder",
   "allowedTools": [
     "mcp__1c__lyra_data_query",
@@ -12,6 +12,9 @@
     "mcp__1c__lyra_data_read",
     "mcp__mcp-1c-docs__search_docs",
     "mcp__mcp-1c-docs__fetch_url",
-    "mcp__mcp-1c-docs__list_libraries"
+    "mcp__mcp-1c-docs__list_libraries",
+    "mcp__vega__search_metadata",
+    "mcp__vega__search_metadata_by_description",
+    "mcp__vega__search_code"
   ]
 }

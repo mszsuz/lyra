@@ -33,6 +33,7 @@ writePidFile();
 
 const config = loadConfig();
 log.setLevel(config.logLevel);
+log.setLogFile();  // router.log in Router/
 log.info(TAG, 'Starting Lyra Router');
 
 let profile = loadProfile(config.profilePath);
@@ -216,7 +217,8 @@ function handleChat(session, data) {
   const text = data.text || data.content || '';
   if (!text) return;
 
-  log.info(TAG, `chat: session=${session.sessionId}, text="${text.slice(0, 100)}"`);
+  session._chatReceivedTime = Date.now();
+  log.info(TAG, `⏱ chat RECEIVED: session=${session.sessionId}, text="${text.slice(0, 100)}"`);
 
   if (session.status !== 'active') {
     centrifugo.apiPublish(session.channel, {
@@ -337,10 +339,20 @@ function spawnClaudeForSession(session, initialMessage, { resume = false } = {})
     systemPromptPath: promptPath,
     resume,
     onEvent: (event) => {
+      // Skip thinking_delta — client only shows "Думаю...", no need to flood with thinking text.
+      // This reduces Centrifugo traffic and prevents disconnect 3012 (no pong) on long responses.
+      if (event.type === 'thinking_delta') return;
+
       // Forward universal protocol events to session channel
       centrifugo.apiPublish(session.channel, event).catch(err => {
         log.error(TAG, `Failed to publish event: ${err.message}`);
       });
+
+      // Timing summary at end of response
+      if (event.type === 'assistant_end' && session._chatReceivedTime) {
+        const totalMs = Date.now() - session._chatReceivedTime;
+        log.info(TAG, `⏱ SUMMARY: total=${totalMs}ms (from chat received to assistant_end), session=${session.sessionId}`);
+      }
 
       // After assistant_end, check for pending message (abort + resend)
       if (event.type === 'assistant_end' && session.pendingMessage) {

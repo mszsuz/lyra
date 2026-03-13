@@ -60,7 +60,9 @@ export function createToolServer(sessionManager, centrifugo, profile) {
       }
 
       const requestId = randomUUID();
-      log.info(TAG, `tool_call: ${tool} (${requestId}) → ${session.channel}`);
+      const toolStartTime = Date.now();
+      const paramsSummary = params ? JSON.stringify(params).slice(0, 300) : '';
+      log.info(TAG, `⏱ tool_call START: ${tool} (${requestId}) → ${session.channel} | ${paramsSummary}`);
 
       // Publish tool_call to session channel
       try {
@@ -80,10 +82,13 @@ export function createToolServer(sessionManager, centrifugo, profile) {
       // Wait for tool_result from Chat EPF
       try {
         const result = await waitForToolResult(session, requestId);
+        const toolMs = Date.now() - toolStartTime;
+        log.info(TAG, `⏱ tool_call END: ${tool} (${requestId}) ${toolMs}ms`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result));
       } catch (err) {
-        log.error(TAG, `tool_call timeout/error: ${err.message}`);
+        const toolMs = Date.now() - toolStartTime;
+        log.error(TAG, `⏱ tool_call TIMEOUT: ${tool} (${requestId}) ${toolMs}ms — ${err.message}`);
         res.writeHead(504, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));
       }

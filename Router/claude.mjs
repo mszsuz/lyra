@@ -58,9 +58,11 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
 
   session.claudeProcess = proc;
   session.streaming = false;
+  session._spawnTime = Date.now();
   log.info(TAG, `Claude PID=${proc.pid}`);
 
   let ready = false;
+  let firstTokenTime = 0;
 
   // Parse stdout NDJSON (StringDecoder handles split multi-byte UTF-8 chars)
   const decoder = new StringDecoder('utf8');
@@ -74,24 +76,48 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
       if (!line.trim()) continue;
       log.debug(TAG, `stdout: ${line.slice(0, 200)}`);
 
-      // Detect init event — Claude is ready
+      // Detect init event and MCP tool usage
       try {
         const raw = JSON.parse(line);
         if (raw.type === 'system' && raw.subtype === 'init' && !ready) {
           ready = true;
-          log.info(TAG, `Claude ready for session ${session.sessionId}`);
+          const initMs = Date.now() - session._spawnTime;
+          log.info(TAG, `Claude ready for session ${session.sessionId} (init: ${initMs}ms)`);
           if (onReady) onReady();
+        }
+        // Log MCP tool calls (Vega, mcp-1c-docs — go through CLI directly)
+        if (raw.type === 'assistant' && raw.message?.content) {
+          for (const block of raw.message.content) {
+            if (block.type === 'tool_use') {
+              const inputStr = JSON.stringify(block.input || {}).slice(0, 200);
+              log.info(TAG, `⏱ MCP tool_use: ${block.name} | ${inputStr}`);
+            }
+            if (block.type === 'tool_result') {
+              const resultStr = typeof block.content === 'string' ? block.content.slice(0, 100) : JSON.stringify(block.content).slice(0, 100);
+              log.info(TAG, `⏱ MCP tool_result: ${block.name || block.tool_use_id} | ${resultStr}`);
+            }
+          }
         }
       } catch {}
 
       const event = transformClaudeEvent(line);
       if (event) {
+        // Timing: first token
+        if (!firstTokenTime && (event.type === 'text_delta' || event.type === 'thinking_start')) {
+          firstTokenTime = Date.now();
+          const ttft = session._chatSentTime ? firstTokenTime - session._chatSentTime : firstTokenTime - session._spawnTime;
+          log.info(TAG, `⏱ TTFT: ${ttft}ms (session ${session.sessionId})`);
+        }
+
         // Track streaming state
         if (event.type === 'text_delta' || event.type === 'thinking_start') {
           session.streaming = true;
         }
         if (event.type === 'assistant_end') {
           session.streaming = false;
+          const totalMs = session._chatSentTime ? Date.now() - session._chatSentTime : Date.now() - session._spawnTime;
+          log.info(TAG, `⏱ Total response: ${totalMs}ms (session ${session.sessionId})`);
+          firstTokenTime = 0; // reset for next turn
         }
         onEvent(event);
       }
@@ -117,6 +143,7 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
         type: 'user',
         message: { role: 'user', content: text },
       });
+      session._chatSentTime = Date.now();
       proc.stdin.write(msg + '\n');
       session.streaming = true;
       log.info(TAG, `Sent chat: ${text.slice(0, 100)}`);
