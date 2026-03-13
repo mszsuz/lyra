@@ -339,9 +339,11 @@ function spawnClaudeForSession(session, initialMessage, { resume = false } = {})
     systemPromptPath: promptPath,
     resume,
     onEvent: (event) => {
-      // Skip thinking_delta — client only shows "Думаю...", no need to flood with thinking text.
+      // Skip thinking_delta and text_delta — client shows preparation statuses during streaming,
+      // final rendered markdown at assistant_end only.
       // This reduces Centrifugo traffic and prevents disconnect 3012 (no pong) on long responses.
       if (event.type === 'thinking_delta') return;
+      if (event.type === 'text_delta') return;
 
       // Forward universal protocol events to session channel
       centrifugo.apiPublish(session.channel, event).catch(err => {

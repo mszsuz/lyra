@@ -8,6 +8,10 @@ import * as log from './log.mjs';
 
 const TAG = 'claude';
 
+function getToolDescription(toolName, toolLabels) {
+  return toolLabels?.[toolName] || toolName;
+}
+
 export function spawnClaude(session, { claudePath, profile, mcpConfigPath, systemPromptPath, onEvent, onReady, onExit, resume = false }) {
   resetState();
 
@@ -91,6 +95,15 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
             if (block.type === 'tool_use') {
               const inputStr = JSON.stringify(block.input || {}).slice(0, 200);
               log.info(TAG, `⏱ MCP tool_use: ${block.name} | ${inputStr}`);
+              // Emit tool_status for client UI (progress indicator)
+              // Skip internal CLI tools (ToolSearch, etc.) — not useful for user
+              if (block.name !== 'ToolSearch') {
+                onEvent({
+                  type: 'tool_status',
+                  tool: block.name,
+                  description: getToolDescription(block.name, profile.toolLabels),
+                });
+              }
             }
             if (block.type === 'tool_result') {
               const resultStr = typeof block.content === 'string' ? block.content.slice(0, 100) : JSON.stringify(block.content).slice(0, 100);

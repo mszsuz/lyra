@@ -70,6 +70,7 @@ Router/
 │   ├── model.json          — модель, allowedTools
 │   ├── system-prompt.md    — шаблон промпта ({{ }} переменные)
 │   ├── tools.json          — описания lyra_* инструментов (input_schema)
+│   ├── tool-labels.json    — человекочитаемые описания инструментов для UI клиента
 │   └── vega.json           — маппинг конфигураций → Vega порты
 ├── CLAUDE.md           — этот файл
 ├── ЕХТ_Лира_Роутер/    — симлинк на расширение 1С (историческое)
@@ -142,11 +143,12 @@ Claude stream-json → model-agnostic events:
 `profiles/default/` — набор файлов для конфигурации Claude сессии:
 
 - **model.json** — модель (`sonnet`), `allowedTools` (MCP tool names)
-- **system-prompt.md** — шаблон с `{{ ИмяКонфигурации }}`, `{% Если %}` блоками
-- **tools.json** — описания lyra_* инструментов для MCP server
+- **system-prompt.md** — шаблон с `{{ ИмяКонфигурации }}`, `{{ ТекущаяДата }}`, `{% Если %}` блоками
+- **tools.json** — описания lyra_* инструментов для MCP server (input_schema, hints)
+- **tool-labels.json** — человекочитаемые описания инструментов для UI клиента (например `"mcp__1c__lyra_data_query": "Получаю данные из базы..."`)
 - **vega.json** — маппинг config_name → Vega MCP port
 
-**Hot reload:** профиль перечитывается при каждом спавне Claude (`loadProfile()` в `spawnClaudeForSession`). Можно менять tools.json, model.json, system-prompt.md без перезапуска роутера — изменения подхватятся при следующей сессии или респавне.
+**Hot reload:** профиль перечитывается при каждом спавне Claude (`loadProfile()` в `spawnClaudeForSession`). Можно менять tools.json, model.json, system-prompt.md, tool-labels.json без перезапуска роутера — изменения подхватятся при следующей сессии или респавне.
 
 ## MCP Config (генерируется для каждой сессии)
 
@@ -210,7 +212,8 @@ Claude stream-json → model-agnostic events:
 
 ## Фильтрация событий
 
-- `thinking_delta` — **не передаётся** клиенту. Чат показывает "Думаю...", текст размышлений не нужен. Фильтрация предотвращает disconnect 3012 (no pong) — клиент не успевал обрабатывать поток thinking при длинных ответах.
+- `thinking_delta` — **не передаётся** клиенту. Чат показывает "Анализирую...", текст размышлений не нужен. Фильтрация предотвращает disconnect 3012 (no pong) — клиент не успевал обрабатывать поток thinking при длинных ответах.
+- `tool_status` — уведомление о вызове MCP-инструмента (`{type: "tool_status", tool, description}`). Описание берётся из `tool-labels.json`. Клиент показывает статусы с группировкой и дедупликацией.
 
 ## Vega MCP
 

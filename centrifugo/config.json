@@ -3,6 +3,9 @@
     "port": "11000"
   },
   "client": {
+    "max_message_size": 524288,
+    "ping_interval": "90s",
+    "pong_timeout": "60s",
     "token": {
       "hmac_secret_key": "wtFBIxmI__UGR23PSDUPgjj5MlkCtgAT1-WHkZmMGOX5MKge30CmyeOL3Ai2U-F_qCOPyAIjbkbAkP5W_RP7Yw"
     },
@@ -11,7 +14,8 @@
       "http://localhost:8080",
       "http://localhost:8300",
       "http://localhost:9091",
-      "http://192.168.1.2:9091"
+      "http://192.168.1.2:9091",
+      "https://accounting.demo.1c.ru"
     ]
   },
   "admin": {

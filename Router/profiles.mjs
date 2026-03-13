@@ -54,6 +54,15 @@ export function loadProfile(profilePath) {
     log.info(TAG, `vega config loaded (${Object.keys(profile.vegaConfig.configs || {}).length} configs)`);
   }
 
+  // tool-labels.json — human-readable descriptions for client UI
+  const labelsPath = resolve(dir, 'tool-labels.json');
+  if (existsSync(labelsPath)) {
+    profile.toolLabels = readJSON(labelsPath);
+    log.info(TAG, `tool labels loaded (${Object.keys(profile.toolLabels).length} tools)`);
+  } else {
+    profile.toolLabels = {};
+  }
+
   return profile;
 }
 
@@ -62,7 +71,11 @@ export function renderSystemPrompt(template, session, profile) {
   // Определяем, подключена ли Vega к этой конфигурации
   const vegaConnected = profile?.vegaConfig?.configs?.[session.configName] ? session.configName : '';
 
+  const now = new Date();
+  const текущаяДата = now.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' });
+
   const vars = {
+    'ТекущаяДата': текущаяДата,
     'ИмяКонфигурации': session.configName || '',
     'ВерсияКонфигурации': session.configVersion || '',
     'Компьютер': session.computer || '',

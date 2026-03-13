@@ -19,7 +19,7 @@
 					<v8:content>Лира: Чат (модульный)</v8:content>
 				</v8:item>
 			</Synonym>
-			<Comment>26.03.13.1</Comment>
+			<Comment>26.03.13.3</Comment>
 			<DefaultForm>ExternalDataProcessor.Lyra_Chat_multiform.Form.Форма</DefaultForm>
 			<AuxiliaryForm/>
 		</Properties>
