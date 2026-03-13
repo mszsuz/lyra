@@ -6,8 +6,8 @@
     "message_size_limit": 2097152
   },
   "client": {
-    "ping_interval": "90s",
-    "pong_timeout": "60s",
+    "ping_interval": "130s",
+    "pong_timeout": "120s",
     "token": {
       "hmac_secret_key": "wtFBIxmI__UGR23PSDUPgjj5MlkCtgAT1-WHkZmMGOX5MKge30CmyeOL3Ai2U-F_qCOPyAIjbkbAkP5W_RP7Yw"
     },
