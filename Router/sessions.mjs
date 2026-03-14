@@ -64,6 +64,10 @@ export class SessionManager {
     return sessionId ? this.get(sessionId) : null;
   }
 
+  getAll() {
+    return [...this.sessions.values()];
+  }
+
   getByChannel(channel) {
     // channel = "session:<sessionId>"
     const sessionId = channel.replace('session:', '');

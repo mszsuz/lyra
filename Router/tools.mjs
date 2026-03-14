@@ -9,7 +9,7 @@ import * as log from './log.mjs';
 const TAG = 'tools';
 const TOOL_CALL_TIMEOUT = 60_000;
 
-export function createToolServer(sessionManager, centrifugo, profile) {
+export function createToolServer(sessionManager, centrifugo, getProfile) {
   const server = createServer(async (req, res) => {
     // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -26,7 +26,7 @@ export function createToolServer(sessionManager, centrifugo, profile) {
 
     // GET /tools — return tool definitions
     if (req.method === 'GET' && url.pathname === '/tools') {
-      const tools = profile.clientTools || [];
+      const tools = getProfile().clientTools || [];
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ tools }));
       return;

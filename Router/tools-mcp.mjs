@@ -14,8 +14,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const ROUTER_URL = process.env.LYRA_TOOLS_URL;
 const SESSION_ID = process.env.LYRA_SESSION_ID;
-const CONFIG_NAME = process.env.LYRA_CONFIG_NAME || '';
-const USER_ID = process.env.LYRA_USER_ID || '';
+const CONFIG_NAME = (process.env.LYRA_CONFIG_NAME || '').replace(/[/\\]/g, '').replace(/^\.+/, '_');
+const USER_ID = (process.env.LYRA_USER_ID || '').replace(/[/\\]/g, '').replace(/^\.+/, '_');
 const NAPARNIK_TOKEN = process.env.LYRA_NAPARNIK_TOKEN || '';
 const NAPARNIK_BASE_URL = 'https://code.1c.ai';
 const TOOL_CALL_TIMEOUT = 60_000;
@@ -171,6 +171,9 @@ function handleMemoryTool(toolName, args) {
   if (toolName === 'lyra_memory_read') {
     const name = args.name;
     if (!name) throw new Error('Не указано имя знания');
+    if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(name) && !/^[a-z0-9]$/.test(name)) {
+      throw new Error('Имя знания должно содержать только латинские буквы, цифры и дефисы');
+    }
 
     // Общее + пользовательское (пользовательское переопределяет общее)
     const parts = [];

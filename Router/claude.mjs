@@ -6,7 +6,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { StringDecoder } from 'node:string_decoder';
-import { transformClaudeEvent, resetState } from './protocol.mjs';
+import { createParser } from './protocol.mjs';
 import * as log from './log.mjs';
 
 const TAG = 'claude';
@@ -16,7 +16,7 @@ function getToolDescription(toolName, toolLabels) {
 }
 
 export function spawnClaude(session, { claudePath, profile, mcpConfigPath, systemPromptPath, onEvent, onReady, onExit, resume = false }) {
-  resetState();
+  const parser = createParser();
 
   const args = [
     '-p',
@@ -128,7 +128,7 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
         }
       } catch {}
 
-      const event = transformClaudeEvent(line);
+      const event = parser.transform(line);
       if (event) {
         // Timing: first token
         if (!firstTokenTime && (event.type === 'text_delta' || event.type === 'thinking_start')) {

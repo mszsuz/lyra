@@ -88,7 +88,7 @@ export class CentrifugoClient {
       try {
         await this.connect(this._token);
         log.info(TAG, 'Reconnected');
-        // Re-subscribe to channels if needed — handled by server.mjs
+        if (this._onReconnect) this._onReconnect();
       } catch (err) {
         log.error(TAG, `Reconnect failed: ${err.message}`);
         this._scheduleReconnect();
@@ -122,6 +122,10 @@ export class CentrifugoClient {
 
   onPush(callback) {
     this.pushHandler = callback;
+  }
+
+  onReconnect(callback) {
+    this._onReconnect = callback;
   }
 
   // --- Server API (HTTP) ---

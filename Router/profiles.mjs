@@ -8,6 +8,13 @@ import * as log from './log.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TAG = 'profiles';
 
+// Validate path segment — no slashes, dots-only, or path traversal
+function safeName(name) {
+  if (!name || typeof name !== 'string') return '';
+  // Strip any directory separators and leading dots
+  return name.replace(/[/\\]/g, '').replace(/^\.+/, '_');
+}
+
 function readJSON(path) {
   return JSON.parse(readFileSync(path, 'utf-8').replace(/^\uFEFF/, ''));
 }
@@ -73,14 +80,16 @@ export function renderSystemPrompt(template, session, profile) {
     const parts = [];
 
     // Общая база
-    const globalPath = resolve(__dirname, 'memory', session.configName, 'registry.md');
+    const configDir = safeName(session.configName);
+    if (!configDir) return '';
+    const globalPath = resolve(__dirname, 'memory', configDir, 'registry.md');
     if (existsSync(globalPath)) {
       parts.push('## Общая база знаний\n' + readFileSync(globalPath, 'utf-8').trim());
     }
 
     // Личная база пользователя
     if (session.userId) {
-      const userPath = resolve(__dirname, '.users', session.userId, 'memory', session.configName, 'registry.md');
+      const userPath = resolve(__dirname, '.users', session.userId, 'memory', configDir, 'registry.md');
       if (existsSync(userPath)) {
         parts.push('## Мои знания\n' + readFileSync(userPath, 'utf-8').trim());
       }

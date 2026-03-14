@@ -2,7 +2,7 @@
 // Attachments (attach array) are saved as files, replaced with relative paths
 
 import { mkdirSync, appendFileSync, writeFileSync, renameSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { resolve, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -39,7 +39,9 @@ function extractAttachments(session, data) {
     session._attachCounter++;
     const idx = String(session._attachCounter).padStart(4, '0');
     const ext = item.ext || item.type || 'bin';
-    const name = item.name || `${idx}.${ext}`;
+    const rawName = item.name || `${idx}.${ext}`;
+    // Sanitize: strip directory components, prevent path traversal
+    const name = basename(rawName).replace(/^\.+/, '_') || `${idx}.${ext}`;
     const filePath = join(attachDir, name);
 
     // Decode base64 content and save

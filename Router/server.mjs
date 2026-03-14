@@ -82,7 +82,7 @@ const centrifugo = new CentrifugoClient(
   config.centrifugo.apiKey,
 );
 
-const toolServer = createToolServer(sessions, centrifugo, profile);
+const toolServer = createToolServer(sessions, centrifugo, () => profile);
 
 const toolsPort = await new Promise((resolve) => {
   toolServer.listen(config.toolsPort, '127.0.0.1', () => {
@@ -108,6 +108,17 @@ try {
   log.error(TAG, `Failed to connect to Centrifugo: ${err.message}`);
   process.exit(1);
 }
+
+// Re-subscribe router to all active session channels after Centrifugo reconnect
+centrifugo.onReconnect(() => {
+  const activeSessions = sessions.getAll();
+  log.info(TAG, `Reconnect: re-subscribing to ${activeSessions.length} session channels`);
+  for (const s of activeSessions) {
+    centrifugo.apiSubscribe('router-1', centrifugo.clientId, s.channel).catch(err => {
+      log.error(TAG, `Reconnect re-subscribe failed for ${s.channel}: ${err.message}`);
+    });
+  }
+});
 
 // --- Push dispatcher ---
 
