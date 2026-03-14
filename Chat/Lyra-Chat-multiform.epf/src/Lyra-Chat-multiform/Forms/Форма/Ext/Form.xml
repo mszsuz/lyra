@@ -87,6 +87,7 @@
 									<ExtendedTooltip name="ГруппаВерхняяПанельГоризонтальнаяРасширеннаяПодсказка" id="71"/>
 									<ChildItems>
 										<UsualGroup name="ГруппаСессия" id="114">
+											<Visible>false</Visible>
 											<Title>
 												<v8:item>
 													<v8:lang>ru</v8:lang>
@@ -99,7 +100,6 @@
 													<v8:content>Группа сессия</v8:content>
 												</v8:item>
 											</ToolTip>
-											<Visible>false</Visible>
 											<Group>AlwaysHorizontal</Group>
 											<Representation>None</Representation>
 											<ShowTitle>false</ShowTitle>
@@ -146,8 +146,8 @@
 												</InputField>
 												<Button name="КомандаПодключиться" id="76">
 													<Type>UsualButton</Type>
-													<CommandName>Form.Command.Чат1_Подключиться</CommandName>
 													<Visible>false</Visible>
+													<CommandName>Form.Command.Чат1_Подключиться</CommandName>
 													<ExtendedTooltip name="КомандаПодключитьсяРасширеннаяПодсказка" id="77"/>
 												</Button>
 											</ChildItems>
@@ -382,7 +382,7 @@
 	<Attributes>
 		<Attribute name="Объект" id="1">
 			<Type>
-				<v8:Type>cfg:ExternalDataProcessorObject.Lyra_Chat_multiform</v8:Type>
+				<v8:Type>cfg:ExternalDataProcessorObject.ЛираЧат</v8:Type>
 			</Type>
 			<MainAttribute>true</MainAttribute>
 		</Attribute>

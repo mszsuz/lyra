@@ -145,10 +145,11 @@ build-epf.bat "Lyra-Chat-multiform.epf/src" "Lyra-Chat-multiform.epf/Lyra-Chat-m
 ## Ключевые файлы
 
 - `Lyra-Chat-multiform.epf/src/` — исходники (XML + BSL)
-- `Форма/Module.bsl` — главная форма (контроллер, стриминг, ЕХТ_Чат)
-- `МодульBridge/Module.bsl` — мини-клиент Centrifugo (~400 строк)
-- `МодульПарсер/Module.bsl` — JSON через ЧтениеJSON (279 строк, stateless)
-- `МодульMCP/Module.bsl` — MCP strategy-dispatch, серверные обработчики инструментов
+- `Форма/Module.bsl` — главная форма (тонкий диспетчер ~780 строк + ЕХТ_Чат ~470 строк)
+- `МодульЧат/Module.bsl` — жизненный цикл диалога: стриминг, thinking, abort, HTML-билдеры (~380 строк)
+- `МодульТранспорт/Module.bsl` — мини-клиент Centrifugo + JSON (~420 строк, бывш. МодульBridge + МодульПарсер)
+- `МодульОбработка/Module.bsl` — MCP strategy-dispatch, серверные обработчики инструментов (~640 строк, бывш. МодульMCP)
+- `МодульОбщий/Module.bsl` — общие утилиты для нескольких модулей (~300 строк)
 - `ARCHITECTURE.md` — архитектура и паттерны
 - `BACKLOG.md` — бэклог задач
 

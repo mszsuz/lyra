@@ -4,7 +4,7 @@
 	<Attributes>
 		<Attribute name="Объект" id="1">
 			<Type>
-				<v8:Type>cfg:ExternalDataProcessorObject.Lyra_Chat_multiform</v8:Type>
+				<v8:Type>cfg:ExternalDataProcessorObject.ЛираЧат</v8:Type>
 			</Type>
 			<MainAttribute>true</MainAttribute>
 		</Attribute>

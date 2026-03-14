@@ -6,30 +6,29 @@
 				<xr:ClassId>c3831ec8-d8d5-4f93-8a22-f9bfae07327f</xr:ClassId>
 				<xr:ObjectId>7dc6735b-d1c8-4283-af14-d0726b3c7ea1</xr:ObjectId>
 			</xr:ContainedObject>
-			<xr:GeneratedType name="ExternalDataProcessorObject.Lyra_Chat_multiform" category="Object">
+			<xr:GeneratedType name="ExternalDataProcessorObject.ЛираЧат" category="Object">
 				<xr:TypeId>1f2c6d26-a1ae-4fd4-b26d-b724181b03c8</xr:TypeId>
 				<xr:ValueId>c781f505-24a9-4740-b081-8f6effafbab1</xr:ValueId>
 			</xr:GeneratedType>
 		</InternalInfo>
 		<Properties>
-			<Name>Lyra_Chat_multiform</Name>
+			<Name>ЛираЧат</Name>
 			<Synonym>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
-					<v8:content>Лира: Чат (модульный)</v8:content>
+					<v8:content>Лира: Чат</v8:content>
 				</v8:item>
 			</Synonym>
-			<Comment>26.03.13.4</Comment>
-			<DefaultForm>ExternalDataProcessor.Lyra_Chat_multiform.Form.Форма</DefaultForm>
+			<Comment>26.03.14.1</Comment>
+			<DefaultForm>ExternalDataProcessor.ЛираЧат.Form.Форма</DefaultForm>
 			<AuxiliaryForm/>
 		</Properties>
 		<ChildObjects>
 			<Form>Форма</Form>
-			<Form>МодульBridge</Form>
-			<Form>МодульПарсер</Form>
-			<Form>МодульMCP</Form>
-			<Form>ФормаПодключение</Form>
 			<Form>МодульОбщий</Form>
+			<Form>МодульТранспорт</Form>
+			<Form>МодульОбработка</Form>
+			<Form>МодульЧат</Form>
 			<Template>ЕХТ_Чат_ДвоичныеДанныеПриложения</Template>
 			<Template>ЕХТ_Чат_ДвоичныеДанныеКартинкаФонаСветлая</Template>
 			<Template>ЕХТ_Чат_ДвоичныеДанныеКартинкаФонаТемная</Template>
