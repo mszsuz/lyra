@@ -18,8 +18,11 @@ tempdb/
 *.epf
 !*.epf/
 
-# Бинарные файлы
+# Бинарные файлы и архивы
 *.exe
+*.zip
+*.rar
+*.7z
 
 # Router — данные сессий
 Router/.lobby/

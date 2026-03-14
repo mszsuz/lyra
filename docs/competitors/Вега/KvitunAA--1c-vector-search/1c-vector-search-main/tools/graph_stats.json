@@ -1,8 +1,0 @@
-{
-  "name": "graph_stats",
-  "description": "Статистика графовой базы: количество узлов, рёбер, распределение по типам.",
-  "arguments": {
-    "type": "object",
-    "properties": {}
-  }
-}
