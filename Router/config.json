@@ -3,6 +3,10 @@
     "wsUrl": "ws://localhost:11000/connection/websocket",
     "apiUrl": "http://localhost:11000/api"
   },
+  "naparnik": {
+    "url": "http://localhost:8000/mcp",
+    "token": ""
+  },
   "claude": {
     "path": "claude",
     "model": "opus"

@@ -2,6 +2,9 @@
 // Spawns Claude CLI as child process, parses stream-json stdout
 
 import { spawn } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { StringDecoder } from 'node:string_decoder';
 import { transformClaudeEvent, resetState } from './protocol.mjs';
 import * as log from './log.mjs';
@@ -55,8 +58,13 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
   const env = { ...process.env };
   delete env.CLAUDECODE;
 
+  // cwd = папка пользователя — изоляция от чужих данных
+  const userDir = resolve(dirname(fileURLToPath(import.meta.url)), '.users', session.userId || 'anonymous');
+  mkdirSync(userDir, { recursive: true });
+
   const proc = spawn(claudePath, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
+    cwd: userDir,
     env,
   });
 

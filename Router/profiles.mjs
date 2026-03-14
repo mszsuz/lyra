@@ -67,12 +67,27 @@ export function loadProfile(profilePath) {
 }
 
 export function renderSystemPrompt(template, session, profile) {
-  // Загрузить память конфигурации (registry.md)
+  // Загрузить память конфигурации: общая + пользовательская
   let memoryRegistry = '';
   if (session.configName) {
-    const registryPath = resolve(__dirname, 'memory', session.configName, 'registry.md');
-    if (existsSync(registryPath)) {
-      memoryRegistry = readFileSync(registryPath, 'utf-8').trim();
+    const parts = [];
+
+    // Общая база
+    const globalPath = resolve(__dirname, 'memory', session.configName, 'registry.md');
+    if (existsSync(globalPath)) {
+      parts.push('## Общая база знаний\n' + readFileSync(globalPath, 'utf-8').trim());
+    }
+
+    // Личная база пользователя
+    if (session.userId) {
+      const userPath = resolve(__dirname, '.users', session.userId, 'memory', session.configName, 'registry.md');
+      if (existsSync(userPath)) {
+        parts.push('## Мои знания\n' + readFileSync(userPath, 'utf-8').trim());
+      }
+    }
+
+    memoryRegistry = parts.join('\n\n');
+    if (memoryRegistry) {
       log.info(TAG, `memory registry loaded for ${session.configName} (${memoryRegistry.length} chars)`);
     }
   }
@@ -120,7 +135,7 @@ export function renderSystemPrompt(template, session, profile) {
   return result.trim();
 }
 
-export function buildMcpConfig(profile, session, toolsPort) {
+export function buildMcpConfig(profile, session, toolsPort, config) {
   const mcpServers = {};
 
   // 1c tools (via tools-mcp.mjs → HTTP → Router)
@@ -132,6 +147,8 @@ export function buildMcpConfig(profile, session, toolsPort) {
         LYRA_TOOLS_URL: `http://localhost:${toolsPort}/tool-call`,
         LYRA_SESSION_ID: session.sessionId,
         LYRA_CONFIG_NAME: session.configName || '',
+        LYRA_USER_ID: session.userId || '',
+        LYRA_NAPARNIK_TOKEN: config?.naparnik?.token || '',
       },
     };
   }
@@ -160,7 +177,7 @@ export function buildMcpConfig(profile, session, toolsPort) {
   return { mcpServers };
 }
 
-export function writeTempFiles(session, profile, toolsPort) {
+export function writeTempFiles(session, profile, toolsPort, config) {
   const tmpDir = resolve(__dirname, '.lobby', session.sessionId);
   mkdirSync(tmpDir, { recursive: true });
 
@@ -170,7 +187,7 @@ export function writeTempFiles(session, profile, toolsPort) {
   writeFileSync(promptPath, promptContent, 'utf-8');
 
   // MCP config
-  const mcpConfig = buildMcpConfig(profile, session, toolsPort);
+  const mcpConfig = buildMcpConfig(profile, session, toolsPort, config);
   const mcpConfigPath = resolve(tmpDir, 'mcp-config.json');
   writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig), 'utf-8');
 

@@ -69,10 +69,26 @@ function extractAttachments(session, data) {
  * @param {'in'|'out'} direction — 'in' = from client, 'out' = to client
  * @param {object} data — event data
  */
+// Fields that must never be written to history
+const SENSITIVE_KEYS = ['naparnik_token', 'chat_jwt', 'mobile_jwt', 'token', 'api_key', 'secret'];
+
+function stripSensitive(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const result = Array.isArray(obj) ? [...obj] : { ...obj };
+  for (const key of Object.keys(result)) {
+    if (SENSITIVE_KEYS.includes(key)) {
+      result[key] = '[REDACTED]';
+    } else if (typeof result[key] === 'object' && result[key] !== null) {
+      result[key] = stripSensitive(result[key]);
+    }
+  }
+  return result;
+}
+
 export function writeHistory(session, direction, data) {
   try {
     ensureSessionDir(session);
-    const cleaned = extractAttachments(session, data);
+    const cleaned = stripSensitive(extractAttachments(session, data));
     const entry = {
       ts: new Date().toISOString(),
       dir: direction,

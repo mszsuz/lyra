@@ -13,13 +13,45 @@ import { verifyAuth, checkBalance } from './users.mjs';
 import { sanitizeText } from './protocol.mjs';
 import { writeHistory, moveSessionToUser } from './history.mjs';
 import * as log from './log.mjs';
-import { writeFileSync, unlinkSync } from 'node:fs';
+import { writeFileSync, readFileSync, unlinkSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
 
 const TAG = 'server';
 
-// --- PID file ---
+// --- PID file (single-instance guard) ---
 
-const PID_FILE = new URL('./router.pid', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1');
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PID_FILE = __dirname + '/router.pid';
+
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0); // signal 0 = check existence
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isOurProcess(pid) {
+  try {
+    const out = execSync(`wmic process where "ProcessId=${pid}" get CommandLine /format:list`, { encoding: 'utf8' });
+    return out.includes('server.mjs');
+  } catch {
+    return false;
+  }
+}
+
+function killOldRouter() {
+  try {
+    const oldPid = parseInt(readFileSync(PID_FILE, 'utf8').trim(), 10);
+    if (oldPid && oldPid !== process.pid && isProcessAlive(oldPid) && isOurProcess(oldPid)) {
+      console.error(`Killing old router (PID ${oldPid})...`);
+      try { execSync(`taskkill /PID ${oldPid} /T /F`, { stdio: 'ignore' }); } catch {}
+    }
+  } catch {}
+}
 
 function writePidFile() {
   try { writeFileSync(PID_FILE, String(process.pid)); } catch {}
@@ -29,6 +61,7 @@ function removePidFile() {
   try { unlinkSync(PID_FILE); } catch {}
 }
 
+killOldRouter();
 writePidFile();
 
 // --- Load config and profile ---
@@ -88,6 +121,18 @@ centrifugo.onPush((push) => {
   // --- session:lobby ---
   if (channel === 'session:lobby') {
     if (data.type === 'hello') {
+      // Dedup by Centrifugo client UUID (unique per WS connection).
+      // 1C Chat sends multiple hellos from one connection — only first passes.
+      // Reconnect = new WS connection = new clientUUID, so reconnect is not affected.
+      const dedup = clientUUID || data.form_id;
+      if (dedup) {
+        if (_pendingHellos.has(dedup)) {
+          log.info(TAG, `Duplicate hello ignored: client=${clientUUID}`);
+          return;
+        }
+        _pendingHellos.add(dedup);
+        setTimeout(() => _pendingHellos.delete(dedup), 10000);
+      }
       handleHello(data, clientUUID);
     }
     return;
@@ -130,6 +175,8 @@ centrifugo.onPush((push) => {
 });
 
 // --- Hello ---
+
+const _pendingHellos = new Set(); // guard against concurrent hellos with same form_id
 
 async function handleHello(data, clientUUID) {
   log.info(TAG, `hello from client=${clientUUID}`, {
@@ -339,7 +386,7 @@ async function handleMobileConfirm(data, clientUUID) {
 function spawnClaudeForSession(session, initialMessage, { resume = false } = {}) {
   // Reload profile on each spawn — pick up tools.json/model.json changes without restart
   profile = loadProfile(config.profilePath);
-  const { promptPath, mcpConfigPath } = writeTempFiles(session, profile, toolsPort);
+  const { promptPath, mcpConfigPath } = writeTempFiles(session, profile, toolsPort, config);
 
   const { proc, sendChat, abort } = spawnClaude(session, {
     claudePath: config.claude.path,

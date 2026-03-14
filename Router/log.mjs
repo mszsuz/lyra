@@ -21,7 +21,7 @@ export function setLogFile(path) {
 function write(level, tag, msg, extra) {
   if (LEVELS[level] < minLevel) return;
   const ts = new Date().toISOString().replace('T', ' ').slice(0, 23);
-  const parts = [`[${ts}] [${level.toUpperCase()}] [${tag}]`, msg];
+  const parts = [`[${ts}] [${process.pid}] [${level.toUpperCase()}] [${tag}]`, msg];
   if (extra !== undefined) {
     parts.push(typeof extra === 'string' ? extra : JSON.stringify(extra));
   }

@@ -74,9 +74,14 @@ export function transformClaudeEvent(line) {
   // result → assistant_end
   if (ev.type === 'result') {
     _inThinking = false;
-    // Extract full text from result
     const text = ev.result || '';
-    return { type: 'assistant_end', text };
+    const event = { type: 'assistant_end', text };
+    // Сохраняем usage/cost если есть (для истории и биллинга)
+    if (ev.total_cost_usd !== undefined) event.cost_usd = ev.total_cost_usd;
+    if (ev.usage) event.usage = ev.usage;
+    if (ev.model) event.model = ev.model;
+    if (ev.session_id) event.claude_session_id = ev.session_id;
+    return event;
   }
 
   // assistant message — informational only (tool_use handled by MCP internally)
