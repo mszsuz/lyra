@@ -2,6 +2,8 @@ node_modules/
 .vs/
 .env
 *.log
+*.stackdump
+.claude/settings.local.json
 
 # 1С базы данных и временные файлы
 tempdb/
