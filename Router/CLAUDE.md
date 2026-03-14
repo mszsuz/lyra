@@ -57,7 +57,7 @@ Router/
 ├── sessions.mjs        — Map сессий, индекс по form_id, TTL cleanup
 ├── jwt.mjs             — HMAC SHA-256 (node:crypto)
 ├── claude.mjs          — spawn Claude CLI, stream-json → protocol.mjs
-├── tools-mcp.mjs       — MCP server (stdio), спавнится Claude CLI для lyra_* tools
+├── tools-mcp.mjs       — MCP server (stdio), спавнится Claude CLI для lyra_* tools + память (fs)
 ├── tools.mjs           — HTTP endpoint для tool_call/tool_result
 ├── protocol.mjs        — stream-json → универсальный протокол
 ├── history.mjs         — JSONL-лог сессии, сохранение вложений
@@ -79,6 +79,9 @@ Router/
 │   ├── history.jsonl      — JSONL-лог всех событий (in/out)
 │   └── attach/            — вложения (если есть)
 ├── .users/<user_id>/   — данные авторизованных сессий (в .gitignore)
+├── memory/<config>/   — память модели по конфигурациям
+│   ├── registry.md        — реестр знаний (загружается в системный промпт)
+│   └── skills/<name>.md   — файлы знаний (загружаются по запросу через lyra_memory_read)
 ├── CLAUDE.md           — этот файл
 ├── ЕХТ_Лира_Роутер/    — симлинк на расширение 1С (историческое)
 └── ЕХТ_СтдИО/          — симлинк на расширение 1С (историческое)
@@ -241,6 +244,54 @@ Claude stream-json → model-agnostic events:
 - Вложения из массива `attach` сохраняются в подпапку `attach/`, в JSONL пишутся относительные пути
 - При успешной авторизации (`handleAuth`) папка сессии переносится из `.lobby/` в `.users/<userId>/`
 
+## Память модели (memory)
+
+Персистентная память Claude, привязанная к конфигурации 1С. Лира накапливает знания (запросы, структуры, особенности) — они доступны во всех будущих сессиях всех пользователей этой конфигурации.
+
+### Архитектура
+
+```
+Router/memory/
+├── Accounting/           — знания по Бухгалтерии
+│   ├── registry.md       — краткий реестр (загружается в системный промпт)
+│   └── skills/
+│       ├── debitorka-query.md
+│       └── ostatki-tovarov.md
+├── Retail23/             — знания по Рознице 2.3
+│   ├── registry.md
+│   └── skills/...
+└── ...
+```
+
+### Инструменты
+
+| Инструмент | Обработка | Описание |
+|------------|-----------|----------|
+| `lyra_memory_list` | tools-mcp.mjs (локально) | Реестр знаний (registry.md) |
+| `lyra_memory_read` | tools-mcp.mjs (локально) | Чтение файла знания (skills/*.md) |
+| `lyra_memory_save` | tools-mcp.mjs (локально) | Сохранение знания + обновление реестра |
+
+**Важно:** инструменты памяти обрабатываются в `tools-mcp.mjs` локально (файловый I/O), без HTTP и без Centrifugo. Ключ привязки — `LYRA_CONFIG_NAME` (env var, имя конфигурации в Vega).
+
+### Загрузка в промпт
+
+`registry.md` загружается в системный промпт через переменную `{{ ПамятьКонфигурации }}` в `renderSystemPrompt()`. Лира видит реестр знаний сразу при старте сессии и может загрузить нужное знание через `lyra_memory_read`.
+
+### Memory hint (автоподсказка)
+
+После `assistant_end` Роутер проверяет метрики ответа. Если ответ был «дорогим» — отправляет Лире системную подсказку сохранить знание:
+
+**Критерии:** `totalMs > 30000` И `toolCount > 3` И `researchTools = true` (Vega или mcp-1c-docs)
+
+**Поток:**
+1. `claude.mjs` трекает `_turnToolCount` и `_turnResearchTools` за каждый turn
+2. `server.mjs` после assistant_end проверяет метрики → отправляет hint через `sendChat()`
+3. `session._memoryHintActive = true` — подавляет hint-ответ от клиента
+4. `tool_status` ("Сохраняю знание...") пропускается к клиенту
+5. `assistant_end` hint-ответа записывается в history с `_memory_hint: true`, но НЕ публикуется в Centrifugo
+
+**Результат:** знание сохраняется автоматически, пользователь не видит лишних сообщений. Повторный вопрос отрабатывает в ~6 раз быстрее (25 сек vs 2.5 мин в тесте на БухгалтерияПредприятия).
+
 ## Vega MCP
 
 Vega подключается к Claude CLI как HTTP MCP server (через `--mcp-config`). Маппинг конфигураций → порты в `profiles/default/vega.json`. Роутер добавляет Vega в MCP config по `config_name` из hello.
@@ -254,6 +305,7 @@ Vega подключается к Claude CLI как HTTP MCP server (через `
 3. **Tool calls** ✅ — протестировано, lyra_meta_list возвращает данные из базы 1С
 4. **Polish** ✅ — disconnect, reconnect, abort, TTL cleanup, resume
 5. **Vega + хронометраж** ✅ — Vega MCP подключён, логирование с таймингами
+6. **Память модели** ✅ — lyra_memory_list/read/save + автоподсказка, протестировано на демо-базе БухгалтерияПредприятия
 
 ## Переход на API (будущее)
 

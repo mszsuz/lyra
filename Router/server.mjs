@@ -354,6 +354,18 @@ function spawnClaudeForSession(session, initialMessage, { resume = false } = {})
       if (event.type === 'thinking_delta') return;
       if (event.type === 'text_delta') return;
 
+      // Suppress memory hint response — don't forward to client
+      if (session._memoryHintActive) {
+        if (event.type === 'assistant_end') {
+          session._memoryHintActive = false;
+          log.info(TAG, `Memory hint response suppressed: ${(event.text || '').slice(0, 100)}`);
+          writeHistory(session, 'out', { ...event, _memory_hint: true });
+          return; // don't publish to client
+        }
+        // Allow tool_status through (shows "Сохраняю знание..." in UI)
+        if (event.type !== 'tool_status') return;
+      }
+
       // Sanitize assistant_end text: markdown headings → bold, strip HTML tags
       if (event.type === 'assistant_end' && event.text) {
         event.text = sanitizeText(event.text);
@@ -369,6 +381,15 @@ function spawnClaudeForSession(session, initialMessage, { resume = false } = {})
       if (event.type === 'assistant_end' && session._chatReceivedTime) {
         const totalMs = Date.now() - session._chatReceivedTime;
         log.info(TAG, `⏱ SUMMARY: total=${totalMs}ms (from chat received to assistant_end), session=${session.sessionId}`);
+      }
+
+      // After assistant_end, hint to save knowledge if response was expensive
+      if (event.type === 'assistant_end' && event._turnMs > 30000 && event._turnToolCount > 3 && event._turnResearchTools) {
+        const secs = Math.round(event._turnMs / 1000);
+        const hint = `[Системное уведомление] На подготовку ответа ушло ${secs} сек, использовано ${event._turnToolCount} инструментов, включая исследование конфигурации. Если ты провела исследование, которое может пригодиться другим пользователям — сохрани ключевые находки (запросы, структуры, счета) через lyra_memory_save. Если сохранять нечего — просто ответь одним словом «ок».`;
+        log.info(TAG, `Memory hint sent (${secs}s, ${event._turnToolCount} tools)`);
+        session._memoryHintActive = true; // suppress next assistant_end from reaching client
+        setTimeout(() => sendChat(hint), 500);
       }
 
       // After assistant_end, check for pending message (abort + resend)

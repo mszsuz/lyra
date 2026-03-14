@@ -67,6 +67,16 @@ export function loadProfile(profilePath) {
 }
 
 export function renderSystemPrompt(template, session, profile) {
+  // Загрузить память конфигурации (registry.md)
+  let memoryRegistry = '';
+  if (session.configName) {
+    const registryPath = resolve(__dirname, 'memory', session.configName, 'registry.md');
+    if (existsSync(registryPath)) {
+      memoryRegistry = readFileSync(registryPath, 'utf-8').trim();
+      log.info(TAG, `memory registry loaded for ${session.configName} (${memoryRegistry.length} chars)`);
+    }
+  }
+
   // Переменные шаблона
   // Определяем, подключена ли Vega к этой конфигурации
   const vegaConnected = profile?.vegaConfig?.configs?.[session.configName] ? session.configName : '';
@@ -82,6 +92,7 @@ export function renderSystemPrompt(template, session, profile) {
     'ИдентификаторКонфигурации': session.configId || '',
     'Режим': profile?.mode || 'user',
     'VegaКонфигурация': vegaConnected,
+    'ПамятьКонфигурации': memoryRegistry,
   };
 
   let result = template;
@@ -120,6 +131,7 @@ export function buildMcpConfig(profile, session, toolsPort) {
       env: {
         LYRA_TOOLS_URL: `http://localhost:${toolsPort}/tool-call`,
         LYRA_SESSION_ID: session.sessionId,
+        LYRA_CONFIG_NAME: session.configName || '',
       },
     };
   }

@@ -63,6 +63,8 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
   session.claudeProcess = proc;
   session.streaming = false;
   session._spawnTime = Date.now();
+  session._turnToolCount = 0;
+  session._turnResearchTools = false;
   log.info(TAG, `Claude PID=${proc.pid}`);
 
   let ready = false;
@@ -95,6 +97,11 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
             if (block.type === 'tool_use') {
               const inputStr = JSON.stringify(block.input || {}).slice(0, 200);
               log.info(TAG, `⏱ MCP tool_use: ${block.name} | ${inputStr}`);
+              // Track tool usage for memory hints
+              session._turnToolCount++;
+              if (/^mcp__vega__|^mcp__mcp-1c-docs__/.test(block.name)) {
+                session._turnResearchTools = true;
+              }
               // Emit tool_status for client UI (progress indicator)
               // Skip internal CLI tools (ToolSearch, etc.) — not useful for user
               if (block.name !== 'ToolSearch') {
@@ -129,8 +136,15 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
         if (event.type === 'assistant_end') {
           session.streaming = false;
           const totalMs = session._chatSentTime ? Date.now() - session._chatSentTime : Date.now() - session._spawnTime;
-          log.info(TAG, `⏱ Total response: ${totalMs}ms (session ${session.sessionId})`);
-          firstTokenTime = 0; // reset for next turn
+          log.info(TAG, `⏱ Total response: ${totalMs}ms, tools=${session._turnToolCount}, research=${session._turnResearchTools} (session ${session.sessionId})`);
+          // Attach turn metrics to event for server.mjs memory hint logic
+          event._turnMs = totalMs;
+          event._turnToolCount = session._turnToolCount;
+          event._turnResearchTools = session._turnResearchTools;
+          // Reset for next turn
+          firstTokenTime = 0;
+          session._turnToolCount = 0;
+          session._turnResearchTools = false;
         }
         onEvent(event);
       }

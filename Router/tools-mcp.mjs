@@ -6,9 +6,15 @@
 // Zero dependencies — Node.js 22+
 
 import { createInterface } from 'node:readline';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const ROUTER_URL = process.env.LYRA_TOOLS_URL;
 const SESSION_ID = process.env.LYRA_SESSION_ID;
+const CONFIG_NAME = process.env.LYRA_CONFIG_NAME || '';
 const TOOL_CALL_TIMEOUT = 60_000;
 
 if (!ROUTER_URL) die('LYRA_TOOLS_URL env not set');
@@ -71,6 +77,17 @@ rl.on('line', async (line) => {
       return;
     }
 
+    // Memory tools — handle locally (no HTTP roundtrip)
+    if (toolName.startsWith('lyra_memory_')) {
+      try {
+        const result = handleMemoryTool(toolName, toolArgs);
+        respond(id, { content: [{ type: 'text', text: result }] });
+      } catch (err) {
+        respond(id, { content: [{ type: 'text', text: err.message }], isError: true });
+      }
+      return;
+    }
+
     try {
       const result = await callTool(toolName, toolArgs);
 
@@ -100,6 +117,76 @@ rl.on('line', async (line) => {
 });
 
 rl.on('close', () => process.exit(0));
+
+// --- Memory tools (local filesystem) ---
+
+function memoryDir() {
+  if (!CONFIG_NAME) throw new Error('Конфигурация не определена — память недоступна');
+  const dir = resolve(__dirname, 'memory', CONFIG_NAME);
+  mkdirSync(resolve(dir, 'skills'), { recursive: true });
+  return dir;
+}
+
+function handleMemoryTool(toolName, args) {
+  if (toolName === 'lyra_memory_list') {
+    const dir = memoryDir();
+    const registryPath = resolve(dir, 'registry.md');
+    if (!existsSync(registryPath)) return 'Память пуста — знаний по этой конфигурации ещё нет.';
+    return readFileSync(registryPath, 'utf-8');
+  }
+
+  if (toolName === 'lyra_memory_read') {
+    const name = args.name;
+    if (!name) throw new Error('Не указано имя знания');
+    const dir = memoryDir();
+    const skillPath = resolve(dir, 'skills', `${name}.md`);
+    if (!existsSync(skillPath)) throw new Error(`Знание "${name}" не найдено`);
+    return readFileSync(skillPath, 'utf-8');
+  }
+
+  if (toolName === 'lyra_memory_save') {
+    const { name, description, content } = args;
+    if (!name || !description || !content) throw new Error('Необходимы name, description и content');
+    // Validate name (latin, digits, hyphens only)
+    if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(name) && !/^[a-z0-9]$/.test(name)) {
+      throw new Error('Имя должно содержать только латинские буквы, цифры и дефисы (например: debitorka-query)');
+    }
+
+    const dir = memoryDir();
+    const skillPath = resolve(dir, 'skills', `${name}.md`);
+    writeFileSync(skillPath, content, 'utf-8');
+
+    // Update registry
+    updateRegistry(dir, name, description);
+
+    log(`memory saved: ${name} (${content.length} chars)`);
+    return `Знание "${name}" сохранено. Будет доступно во всех будущих сессиях для конфигурации ${CONFIG_NAME}.`;
+  }
+
+  throw new Error(`Неизвестный инструмент памяти: ${toolName}`);
+}
+
+function updateRegistry(dir, name, description) {
+  const registryPath = resolve(dir, 'registry.md');
+  let lines = [];
+
+  if (existsSync(registryPath)) {
+    lines = readFileSync(registryPath, 'utf-8').split('\n').filter(l => l.trim() !== '');
+  }
+
+  // Find existing entry and replace, or append
+  const prefix = `- **${name}** — `;
+  const newLine = `${prefix}${description}`;
+  const idx = lines.findIndex(l => l.startsWith(prefix));
+
+  if (idx >= 0) {
+    lines[idx] = newLine;
+  } else {
+    lines.push(newLine);
+  }
+
+  writeFileSync(registryPath, lines.join('\n') + '\n', 'utf-8');
+}
 
 // --- HTTP communication with Router ---
 

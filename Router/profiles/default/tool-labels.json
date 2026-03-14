@@ -12,5 +12,8 @@
   "mcp__1c__lyra_data_eval": "Вычисляю выражение в базе...",
   "mcp__1c__lyra_data_exec": "Выполняю код в базе...",
   "mcp__1c__lyra_nav_resolve": "Готовлю ссылку на объект...",
-  "mcp__1c__lyra_diag_read_log": "Читаю журнал регистрации..."
+  "mcp__1c__lyra_diag_read_log": "Читаю журнал регистрации...",
+  "mcp__1c__lyra_memory_list": "Проверяю память...",
+  "mcp__1c__lyra_memory_read": "Загружаю знание...",
+  "mcp__1c__lyra_memory_save": "Сохраняю знание..."
 }
