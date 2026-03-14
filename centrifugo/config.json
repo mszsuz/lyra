@@ -33,7 +33,9 @@
       {
         "name": "session",
         "allow_subscribe_for_client": false,
-        "allow_publish_for_client": true
+        "allow_publish_for_client": true,
+        "presence": true,
+        "join_leave": true
       },
       {
         "name": "mobile",

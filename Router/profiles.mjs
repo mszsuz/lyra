@@ -149,7 +149,7 @@ export function buildMcpConfig(profile, session, toolsPort) {
 }
 
 export function writeTempFiles(session, profile, toolsPort) {
-  const tmpDir = resolve(__dirname, '.tmp', session.sessionId);
+  const tmpDir = resolve(__dirname, '.lobby', session.sessionId);
   mkdirSync(tmpDir, { recursive: true });
 
   // System prompt

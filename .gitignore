@@ -19,5 +19,9 @@ tempdb/
 # Бинарные файлы
 *.exe
 
+# Router — данные сессий
+Router/.lobby/
+Router/.users/
+
 # Vega — отдельный git-репозиторий (github.com/mszsuz/Vega)
 Vega/

@@ -3,6 +3,7 @@
 
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { writeHistory } from './history.mjs';
 import * as log from './log.mjs';
 
 const TAG = 'tools';
@@ -65,13 +66,15 @@ export function createToolServer(sessionManager, centrifugo, profile) {
       log.info(TAG, `⏱ tool_call START: ${tool} (${requestId}) → ${session.channel} | ${paramsSummary}`);
 
       // Publish tool_call to session channel
+      const toolCallEvent = {
+        type: 'tool_call',
+        request_id: requestId,
+        tool,
+        params: params || {},
+      };
       try {
-        await centrifugo.apiPublish(session.channel, {
-          type: 'tool_call',
-          request_id: requestId,
-          tool,
-          params: params || {},
-        });
+        await centrifugo.apiPublish(session.channel, toolCallEvent);
+        writeHistory(session, 'out', toolCallEvent);
       } catch (err) {
         log.error(TAG, `Failed to publish tool_call: ${err.message}`);
         res.writeHead(502, { 'Content-Type': 'application/json' });

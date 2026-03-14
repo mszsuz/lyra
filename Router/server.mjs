@@ -11,6 +11,7 @@ import { spawnClaude } from './claude.mjs';
 import { createToolServer, handleToolResult } from './tools.mjs';
 import { verifyAuth, checkBalance } from './users.mjs';
 import { sanitizeText } from './protocol.mjs';
+import { writeHistory, moveSessionToUser } from './history.mjs';
 import * as log from './log.mjs';
 import { writeFileSync, unlinkSync } from 'node:fs';
 
@@ -106,6 +107,8 @@ centrifugo.onPush((push) => {
 
     session.lastActivity = Date.now();
 
+    writeHistory(session, 'in', data);
+
     switch (data.type) {
       case 'chat':
         handleChat(session, data);
@@ -153,13 +156,16 @@ async function handleHello(data, clientUUID) {
         log.error(TAG, `Reconnect subscribe error: ${err.message}`);
       }
 
-      await centrifugo.apiPublish(existing.channel, {
+      const reconnectAck = {
         type: 'hello_ack',
         session_id: existing.sessionId,
         status: 'reconnected',
         chat_jwt: chatJwt,
         // No mobile_jwt/QR on reconnect
-      });
+      };
+      await centrifugo.apiPublish(existing.channel, reconnectAck);
+      writeHistory(existing, 'in', data);
+      writeHistory(existing, 'out', reconnectAck);
 
       // If active and Claude not running — respawn with resume
       if (existing.status === 'active' && !existing.claudeProcess) {
@@ -171,6 +177,7 @@ async function handleHello(data, clientUUID) {
 
   // New session
   const session = sessions.create(data, clientUUID);
+  writeHistory(session, 'in', data);
 
   // Generate JWTs
   const { chatJwt, mobileJwt } = makeSessionJWTs(session.sessionId, config.centrifugo.hmacSecret);
@@ -197,14 +204,16 @@ async function handleHello(data, clientUUID) {
   session.userId = 'mvp-user';
 
   // Publish hello_ack with auto_auth flag
-  await centrifugo.apiPublish(session.channel, {
+  const helloAck = {
     type: 'hello_ack',
     session_id: session.sessionId,
     status: 'new',
     chat_jwt: chatJwt,
     mobile_jwt: mobileJwt,
     auto_auth: true,
-  });
+  };
+  await centrifugo.apiPublish(session.channel, helloAck);
+  writeHistory(session, 'out', helloAck);
 
   log.info(TAG, `hello_ack sent for session ${session.sessionId} (auto_auth=true)`);
 
@@ -258,22 +267,23 @@ async function handleAuth(session, data) {
     session.status = 'active';
     session.userId = user_id;
 
-    await centrifugo.apiPublish(session.channel, {
-      type: 'auth_ack',
-      session_id: session.sessionId,
-      status: 'ok',
-    });
+    const ack = { type: 'auth_ack', session_id: session.sessionId, status: 'ok' };
+    await centrifugo.apiPublish(session.channel, ack);
+    writeHistory(session, 'out', ack);
+    moveSessionToUser(session);
 
     // Spawn Claude if not already running
     if (!session.claudeProcess) {
       spawnClaudeForSession(session);
     }
   } else {
-    await centrifugo.apiPublish(session.channel, {
+    const ack = {
       type: 'auth_ack',
       session_id: session.sessionId,
       status: authResult.ok ? 'insufficient_balance' : 'auth_failed',
-    });
+    };
+    await centrifugo.apiPublish(session.channel, ack);
+    writeHistory(session, 'out', ack);
   }
 }
 
@@ -283,11 +293,9 @@ function handleAbort(session) {
   log.info(TAG, `abort: session=${session.sessionId}`);
   if (session.streaming && session._abort) {
     session._abort();
-    centrifugo.apiPublish(session.channel, {
-      type: 'assistant_end',
-      text: '',
-      aborted: true,
-    });
+    const abortEnd = { type: 'assistant_end', text: '', aborted: true };
+    centrifugo.apiPublish(session.channel, abortEnd);
+    writeHistory(session, 'out', abortEnd);
   }
 }
 
@@ -352,6 +360,7 @@ function spawnClaudeForSession(session, initialMessage, { resume = false } = {})
       }
 
       // Forward universal protocol events to session channel
+      writeHistory(session, 'out', event);
       centrifugo.apiPublish(session.channel, event).catch(err => {
         log.error(TAG, `Failed to publish event: ${err.message}`);
       });

@@ -60,6 +60,7 @@ Router/
 ├── tools-mcp.mjs       — MCP server (stdio), спавнится Claude CLI для lyra_* tools
 ├── tools.mjs           — HTTP endpoint для tool_call/tool_result
 ├── protocol.mjs        — stream-json → универсальный протокол
+├── history.mjs         — JSONL-лог сессии, сохранение вложений
 ├── profiles.mjs        — загрузка профилей, шаблонизация промптов, MCP config
 ├── users.mjs           — in-memory пользователи (MVP)
 ├── log.mjs             — структурированный лог в stderr + router.log
@@ -67,11 +68,17 @@ Router/
 ├── test-resume.mjs     — тест resume (kill Claude → respawn → память сохраняется)
 ├── package.json        — type: module, без зависимостей
 ├── profiles/default/
-│   ├── model.json          — модель, allowedTools
+│   ├── model.json          — модель, mode (роль), allowedTools
 │   ├── system-prompt.md    — шаблон промпта ({{ }} переменные)
 │   ├── tools.json          — описания lyra_* инструментов (input_schema)
 │   ├── tool-labels.json    — человекочитаемые описания инструментов для UI клиента
 │   └── vega.json           — маппинг конфигураций → Vega порты
+├── .lobby/<session_id>/ — данные неавторизованных сессий (в .gitignore)
+│   ├── system-prompt.md   — отрендеренный промпт
+│   ├── mcp-config.json    — MCP config для Claude CLI
+│   ├── history.jsonl      — JSONL-лог всех событий (in/out)
+│   └── attach/            — вложения (если есть)
+├── .users/<user_id>/   — данные авторизованных сессий (в .gitignore)
 ├── CLAUDE.md           — этот файл
 ├── ЕХТ_Лира_Роутер/    — симлинк на расширение 1С (историческое)
 └── ЕХТ_СтдИО/          — симлинк на расширение 1С (историческое)
@@ -142,7 +149,7 @@ Claude stream-json → model-agnostic events:
 
 `profiles/default/` — набор файлов для конфигурации Claude сессии:
 
-- **model.json** — модель (`sonnet`), `allowedTools` (MCP tool names)
+- **model.json** — модель (`sonnet`), `mode` (роль пользователя), `allowedTools` (MCP tool names)
 - **system-prompt.md** — шаблон с `{{ ИмяКонфигурации }}`, `{{ ТекущаяДата }}`, `{% Если %}` блоками
 - **tools.json** — описания lyra_* инструментов для MCP server (input_schema, hints)
 - **tool-labels.json** — человекочитаемые описания инструментов для UI клиента (например `"mcp__1c__lyra_data_query": "Получаю данные из базы..."`)
@@ -198,6 +205,14 @@ Claude stream-json → model-agnostic events:
 - `{{ ИмяКонфигурации }}` → подстановка переменной
 - `{% Если Режим = "founder" Тогда %}...{% КонецЕсли; %}` — условные блоки
 
+Переменная `Режим` берётся из `mode` в `model.json` профиля (по умолчанию `"user"`). Допустимые значения:
+
+| mode | Описание |
+|------|----------|
+| `founder` | Основатель продукта. Полный доступ, можно обсуждать архитектуру, промпты, модели |
+| `advanced_user` | Продвинутый пользователь 1С (программист, аналитик, администратор). Код и технические термины разрешены, архитектура Лиры скрыта |
+| `user` | Обычный пользователь (бухгалтер, кадровик, менеджер). Простой язык, код скрыт, архитектура скрыта |
+
 ## Логирование и хронометраж
 
 `log.mjs` пишет в stderr + файл `router.log` (через `appendFileSync`, обходит буферизацию Node.js при перенаправлении stderr).
@@ -214,6 +229,17 @@ Claude stream-json → model-agnostic events:
 
 - `thinking_delta` — **не передаётся** клиенту. Чат показывает "Анализирую...", текст размышлений не нужен. Фильтрация предотвращает disconnect 3012 (no pong) — клиент не успевал обрабатывать поток thinking при длинных ответах.
 - `tool_status` — уведомление о вызове MCP-инструмента (`{type: "tool_status", tool, description}`). Описание берётся из `tool-labels.json`. Клиент показывает статусы с группировкой и дедупликацией.
+
+## История сессий (history.mjs)
+
+Каждая сессия пишет JSONL-лог всех событий, проходящих через роутер. Файл `history.jsonl` в папке сессии (`.lobby/<session_id>/` до авторизации, `.users/<user_id>/<session_id>/` после).
+
+Формат записи: `{"ts":"ISO","dir":"in|out","type":"...","...":"..."}`
+
+- `dir: "in"` — входящие (от клиента: hello, chat, tool_result, auth, abort, disconnect)
+- `dir: "out"` — исходящие (к клиенту: hello_ack, thinking_start/end, assistant_end, tool_call, auth_ack)
+- Вложения из массива `attach` сохраняются в подпапку `attach/`, в JSONL пишутся относительные пути
+- При успешной авторизации (`handleAuth`) папка сессии переносится из `.lobby/` в `.users/<userId>/`
 
 ## Vega MCP
 
