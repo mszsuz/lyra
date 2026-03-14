@@ -27,6 +27,9 @@
 2. **Claude streaming** ✅ — chat → Claude CLI → text_delta/thinking_delta → канал сессии
 3. **Tool calls** ✅ — Claude → MCP → HTTP → Centrifugo → Chat EPF → tool_result → Claude
 4. **Polish** ✅ — disconnect, reconnect, abort, TTL cleanup
+5. **Vega + хронометраж** ✅ — Vega MCP подключён, логирование с таймингами
+6. **Память модели** ✅ — lyra_memory_list/read/save + автоподсказка
+7. **Hardening** ✅ — single-instance guard, per-session parser, reconnect recovery, path sanitization
 
 ## Архитектура
 
@@ -95,6 +98,7 @@ cd centrifugo && ./centrifugo.exe --config=config.json
 
 # Router
 cd Router && node server.mjs
+# При запуске нового роутера предыдущий инстанс автоматически останавливается (killOldRouter).
 
 # Тест hello flow
 node test-hello.mjs
@@ -106,7 +110,7 @@ node test-hello.mjs
 
 Роутер подключается с JWT, содержащим `channels: ["session:lobby", "mobile:lobby"]` — авто-подписка при connect (namespace `session:` имеет `allow_subscribe_for_client: false`).
 
-Для каналов сессий — Server API subscribe (`apiSubscribe(user, client, channel)`).
+Для каналов сессий — Server API subscribe (`apiSubscribe(user, client, channel)`). После reconnect к Centrifugo роутер автоматически переподписывается на все активные session-каналы через `onReconnect()`.
 
 Push dispatcher в server.mjs маршрутизирует по каналу и типу:
 
@@ -138,7 +142,7 @@ Push dispatcher в server.mjs маршрутизирует по каналу и 
 
 ## Универсальный протокол (protocol.mjs)
 
-Claude stream-json → model-agnostic events:
+Claude stream-json → model-agnostic events. Состояние парсера — per-session через `createParser()`, не глобальное:
 
 | Claude stream-json | → | Универсальный протокол |
 |---|---|---|
@@ -218,7 +222,7 @@ Claude stream-json → model-agnostic events:
 
 ## Логирование и хронометраж
 
-`log.mjs` пишет в stderr + файл `router.log` (через `appendFileSync`, обходит буферизацию Node.js при перенаправлении stderr).
+`log.mjs` пишет в stderr + файл `router.log` (через `appendFileSync`, обходит буферизацию Node.js при перенаправлении stderr). Каждая строка лога содержит PID процесса: `[timestamp] [pid] [LEVEL] [tag] message`
 
 Тайминги (метки `⏱` в логах):
 - `chat RECEIVED` — момент получения сообщения от пользователя
