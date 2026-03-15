@@ -268,7 +268,7 @@ async function handleHello(data, clientUUID) {
   const userConfig = getUserConfig(session.userId, session.baseIds);
   session.naparnikToken = userConfig.naparnikToken || '';
   session.dbName = userConfig.dbName || '';
-  session.dbId = session.baseIds.ssl_id || session.baseIds.user_id || session.baseIds.storage_id || session.baseIds.connect_id || '';
+  session.dbId = userConfig.dbId || '';
   session.settingsFile = userConfig.settingsFile || '';
 
   // Publish hello_ack with auto_auth flag and user settings
@@ -344,7 +344,7 @@ async function handleAuth(session, data) {
     const userConfig = getUserConfig(user_id, session.baseIds);
     session.naparnikToken = userConfig.naparnikToken || '';
     session.dbName = userConfig.dbName || '';
-    session.dbId = session.baseIds.ssl_id || session.baseIds.user_id || session.baseIds.storage_id || session.baseIds.connect_id || '';
+    session.dbId = userConfig.dbId || '';
     session.settingsFile = userConfig.settingsFile || '';
     const ack = {
       type: 'auth_ack', session_id: session.sessionId, status: 'ok',

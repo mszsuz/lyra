@@ -2,12 +2,12 @@
 // Structure:
 //   .users/<userId>/profile.json     — user-level settings (name, level, token)
 //   .users/<userId>/databases.json   — registry [{base_ids, db_name, settings_file}]
-//   .users/<userId>/db-<hash>.json   — per-database settings
+//   .users/<userId>/db-<id>.json      — per-database settings (id = stable UUID)
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import * as log from './log.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -118,13 +118,6 @@ function saveDbSettings(userId, settingsFile, data) {
   writeJSON(resolve(dir, settingsFile), data);
 }
 
-function makeSettingsFilename(baseIds) {
-  // Use first available ID as hash source
-  const source = baseIds.ssl_id || baseIds.user_id || baseIds.storage_id || baseIds.connect_id || '';
-  const hash = createHash('md5').update(source).digest('hex').slice(0, 8);
-  return `db-${hash}.json`;
-}
-
 // --- Public API ---
 
 /**
@@ -151,6 +144,7 @@ export function getUserConfig(userId, baseIds) {
     const databases = getDatabases(userId);
     const db = findDatabase(databases, baseIds);
     if (db) {
+      result.dbId = db.id || '';
       result.dbName = db.db_name || '';
       result.settingsFile = db.settings_file || '';
       // Update last_connected timestamp
@@ -201,11 +195,13 @@ export function saveUserSettings(userId, settings, baseIds) {
     let db = findDatabase(databases, baseIds);
 
     if (!db) {
-      // New database — add to registry
+      // New database — add to registry with stable UUID
+      const dbId = randomUUID();
       db = {
+        id: dbId,
         base_ids: { ...baseIds },
         db_name: settings.db_name,
-        settings_file: makeSettingsFilename(baseIds),
+        settings_file: `db-${dbId}.json`,
         created_at: new Date().toISOString(),
         last_connected: new Date().toISOString(),
       };
