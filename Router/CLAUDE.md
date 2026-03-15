@@ -65,7 +65,7 @@ Router/
 ├── protocol.mjs        — stream-json → универсальный протокол
 ├── history.mjs         — JSONL-лог сессии, сохранение вложений
 ├── profiles.mjs        — загрузка профилей, шаблонизация промптов, MCP config
-├── users.mjs           — in-memory пользователи (MVP)
+├── users.mjs           — профили + реестр баз + настройки per-database (файловое хранение)
 ├── log.mjs             — структурированный лог в stderr + router.log
 ├── test-hello.mjs      — тест hello flow
 ├── test-resume.mjs     — тест resume (kill Claude → respawn → память сохраняется)
@@ -81,10 +81,17 @@ Router/
 │   ├── mcp-config.json    — MCP config для Claude CLI
 │   ├── history.jsonl      — JSONL-лог всех событий (in/out)
 │   └── attach/            — вложения (если есть)
-├── .users/<user_id>/   — данные авторизованных сессий (в .gitignore)
-├── memory/<config>/   — память модели по конфигурациям
+├── .users/<user_id>/   — данные пользователей (в .gitignore)
+│   ├── profile.json       — профиль (имя, уровень, токен, timestamps)
+│   ├── databases.json     — реестр баз [{base_ids, db_name, settings_file}]
+│   ├── db-<hash>.json     — настройки per-database (base_ids, permissions)
+│   ├── memory/<config>/   — личная память модели per-user per-config
+│   │   ├── registry.md
+│   │   └── skills/<name>.md
+│   └── <session_id>/      — данные авторизованных сессий
+├── memory/<config>/   — общая память модели по конфигурациям (read-only для пользователей)
 │   ├── registry.md        — реестр знаний (загружается в системный промпт)
-│   └── skills/<name>.md   — файлы знаний (загружаются по запросу через lyra_memory_read)
+│   └── skills/<name>.md   — файлы знаний (YAML frontmatter: db_id, db_name, saved)
 ├── CLAUDE.md           — этот файл
 ├── ЕХТ_Лира_Роутер/    — симлинк на расширение 1С (историческое)
 └── ЕХТ_СтдИО/          — симлинк на расширение 1С (историческое)
@@ -270,17 +277,36 @@ delete env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
 ### Архитектура
 
 ```
-Router/memory/
-├── Accounting/           — знания по Бухгалтерии
-│   ├── registry.md       — краткий реестр (загружается в системный промпт)
+Router/memory/                          — общая память (read-only для пользователей)
+├── БухгалтерияПредприятия/
+│   ├── registry.md                     — краткий реестр (загружается в системный промпт)
 │   └── skills/
 │       ├── debitorka-query.md
 │       └── ostatki-tovarov.md
-├── Retail23/             — знания по Рознице 2.3
+└── ...
+
+Router/.users/<user_id>/memory/         — личная память (read-write)
+├── БухгалтерияПредприятия/
 │   ├── registry.md
 │   └── skills/...
 └── ...
 ```
+
+### Формат файлов знаний
+
+Каждый файл знания содержит YAML frontmatter с метаданными базы:
+
+```markdown
+---
+db_id: af79cd39-a8b6-4e61-bcbd-d3a868e4957c
+db_name: accounting.demo.1c.ru
+saved: 2026-03-15T20:22:00.000Z
+---
+
+## Содержание знания...
+```
+
+В registry.md: `- **name** — описание [db_name]`
 
 ### Инструменты
 
@@ -290,7 +316,7 @@ Router/memory/
 | `lyra_memory_read` | tools-mcp.mjs (локально) | Чтение файла знания (skills/*.md) |
 | `lyra_memory_save` | tools-mcp.mjs (локально) | Сохранение знания + обновление реестра |
 
-**Важно:** инструменты памяти обрабатываются в `tools-mcp.mjs` локально (файловый I/O), без HTTP и без Centrifugo. Ключ привязки — `LYRA_CONFIG_NAME` (env var, имя конфигурации в Vega).
+**Важно:** инструменты памяти обрабатываются в `tools-mcp.mjs` локально (файловый I/O), без HTTP и без Centrifugo. Env vars: `LYRA_CONFIG_NAME` (конфигурация), `LYRA_USER_ID` (пользователь), `LYRA_DB_ID` (идентификатор базы), `LYRA_DB_NAME` (название базы).
 
 ### Загрузка в промпт
 

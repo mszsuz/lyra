@@ -706,7 +706,7 @@ config_name + connection_string + computer
 
 ```json
 // Чат → session:lobby
-{"type": "hello", "form_id": "uuid-формы", "config_name": "БухгалтерияПредприятия", "config_version": "3.0.191.41", "config_id": "DEADBEEF-0000-0000-0000-00000000F00D", "computer": "BUHPC-01", "connection_string": "Srvr=\"srv1c\";Ref=\"buh_prod\";"}
+{"type": "hello", "form_id": "uuid-формы", "config_name": "БухгалтерияПредприятия", "config_version": "3.0.191.41", "config_id": "DEADBEEF-0000-0000-0000-00000000F00D", "computer": "BUHPC-01", "connection_string": "Srvr=\"srv1c\";Ref=\"buh_prod\";", "base_ids": {"ssl_id": "uuid", "user_id": "uuid", "storage_id": "uuid", "connect_id": "md5-hash"}}
 
 // Роутер → session:<id> (новая сессия)
 {"type": "hello_ack", "session_id": "uuid-сессии", "status": "awaiting_auth", "chat_jwt": "eyJ...", "mobile_jwt": "eyJ..."}

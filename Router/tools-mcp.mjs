@@ -16,6 +16,8 @@ const ROUTER_URL = process.env.LYRA_TOOLS_URL;
 const SESSION_ID = process.env.LYRA_SESSION_ID;
 const CONFIG_NAME = (process.env.LYRA_CONFIG_NAME || '').replace(/[/\\]/g, '').replace(/^\.+/, '_');
 const USER_ID = (process.env.LYRA_USER_ID || '').replace(/[/\\]/g, '').replace(/^\.+/, '_');
+const DB_NAME = process.env.LYRA_DB_NAME || '';
+const DB_ID = process.env.LYRA_DB_ID || '';
 const TOOL_CALL_TIMEOUTS = (() => {
   try { return JSON.parse(process.env.LYRA_TOOL_CALL_TIMEOUT || '{}'); } catch { return {}; }
 })();
@@ -195,7 +197,9 @@ function handleMemoryTool(toolName, args) {
     // Сохраняем только в личную папку
     const dir = userMemoryDir();
     const skillPath = resolve(dir, 'skills', `${name}.md`);
-    writeFileSync(skillPath, content, 'utf-8');
+    // Добавляем метаданные в начало файла
+    const meta = `---\ndb_id: ${DB_ID || 'unknown'}\ndb_name: ${DB_NAME || 'unknown'}\nsaved: ${new Date().toISOString()}\n---\n\n`;
+    writeFileSync(skillPath, meta + content, 'utf-8');
     updateRegistry(dir, name, description);
 
     log(`memory saved: ${USER_ID}/${CONFIG_NAME}/${name} (${content.length} chars)`);
@@ -214,7 +218,8 @@ function updateRegistry(dir, name, description) {
   }
 
   const prefix = `- **${name}** — `;
-  const newLine = `${prefix}${description}`;
+  const dbSuffix = DB_NAME ? ` [${DB_NAME}]` : (DB_ID ? ` [${DB_ID.slice(0, 8)}]` : '');
+  const newLine = `${prefix}${description}${dbSuffix}`;
   const idx = lines.findIndex(l => l.startsWith(prefix));
 
   if (idx >= 0) {

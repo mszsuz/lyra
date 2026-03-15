@@ -158,6 +158,8 @@ export function buildMcpConfig(profile, session, toolsPort, config) {
         LYRA_SESSION_ID: session.sessionId,
         LYRA_CONFIG_NAME: session.configName || '',
         LYRA_USER_ID: session.userId || '',
+        LYRA_DB_NAME: session.dbName || '',
+        LYRA_DB_ID: session.dbId || '',
         LYRA_TOOL_CALL_TIMEOUT: JSON.stringify(config.toolCallTimeout || {}),
       },
     };

@@ -9,7 +9,7 @@ import { makeSessionJWTs, makeRouterJWT } from './jwt.mjs';
 import { loadProfile, writeTempFiles } from './profiles.mjs';
 import { spawnClaude } from './claude.mjs';
 import { createToolServer, handleToolResult } from './tools.mjs';
-import { verifyAuth, checkBalance, getUserConfig } from './users.mjs';
+import { verifyAuth, checkBalance, getUserConfig, saveUserSettings } from './users.mjs';
 import { sanitizeText } from './protocol.mjs';
 import { writeHistory, moveSessionToUser } from './history.mjs';
 import * as log from './log.mjs';
@@ -181,6 +181,9 @@ centrifugo.onPush((push) => {
       case 'disconnect':
         handleDisconnect(session);
         break;
+      case 'settings_save':
+        handleSettingsSave(session, data);
+        break;
     }
   }
 });
@@ -262,10 +265,13 @@ async function handleHello(data, clientUUID) {
   session.userId = 'mvp-user';
 
   // Read user config (naparnik token etc.)
-  const userConfig = getUserConfig(session.userId);
+  const userConfig = getUserConfig(session.userId, session.baseIds);
   session.naparnikToken = userConfig.naparnikToken || '';
+  session.dbName = userConfig.dbName || '';
+  session.dbId = session.baseIds.ssl_id || session.baseIds.user_id || session.baseIds.storage_id || session.baseIds.connect_id || '';
+  session.settingsFile = userConfig.settingsFile || '';
 
-  // Publish hello_ack with auto_auth flag
+  // Publish hello_ack with auto_auth flag and user settings
   const helloAck = {
     type: 'hello_ack',
     session_id: session.sessionId,
@@ -274,6 +280,11 @@ async function handleHello(data, clientUUID) {
     mobile_jwt: mobileJwt,
     auto_auth: true,
     naparnik_token: userConfig.naparnikToken || '',
+    settings: {
+      user_name: userConfig.userName || '',
+      user_level: userConfig.userLevel || '',
+      db_name: userConfig.dbName || '',
+    },
   };
   await centrifugo.apiPublish(session.channel, helloAck);
   writeHistory(session, 'out', helloAck);
@@ -330,9 +341,20 @@ async function handleAuth(session, data) {
     session.status = 'active';
     session.userId = user_id;
 
-    const userConfig = getUserConfig(user_id);
+    const userConfig = getUserConfig(user_id, session.baseIds);
     session.naparnikToken = userConfig.naparnikToken || '';
-    const ack = { type: 'auth_ack', session_id: session.sessionId, status: 'ok', naparnik_token: session.naparnikToken };
+    session.dbName = userConfig.dbName || '';
+    session.dbId = session.baseIds.ssl_id || session.baseIds.user_id || session.baseIds.storage_id || session.baseIds.connect_id || '';
+    session.settingsFile = userConfig.settingsFile || '';
+    const ack = {
+      type: 'auth_ack', session_id: session.sessionId, status: 'ok',
+      naparnik_token: session.naparnikToken,
+      settings: {
+        user_name: userConfig.userName || '',
+        user_level: userConfig.userLevel || '',
+        db_name: userConfig.dbName || '',
+      },
+    };
     await centrifugo.apiPublish(session.channel, ack);
     writeHistory(session, 'out', ack);
     moveSessionToUser(session);
@@ -362,6 +384,29 @@ function handleAbort(session) {
     centrifugo.apiPublish(session.channel, abortEnd);
     writeHistory(session, 'out', abortEnd);
   }
+}
+
+// --- Settings ---
+
+function handleSettingsSave(session, data) {
+  const settings = {};
+  if (data.naparnik_token !== undefined) settings.naparnik_token = data.naparnik_token;
+  if (data.user_name !== undefined) settings.user_name = data.user_name;
+  if (data.user_level !== undefined) settings.user_level = data.user_level;
+  if (data.db_name !== undefined) settings.db_name = data.db_name;
+
+  log.info(TAG, `settings_save: session=${session.sessionId}, keys=${Object.keys(settings).join(',')}`);
+
+  const result = saveUserSettings(session.userId, settings, session.baseIds);
+
+  // Update session
+  if (result.naparnikToken) session.naparnikToken = result.naparnikToken;
+
+  // Confirm to client
+  centrifugo.apiPublish(session.channel, {
+    type: 'settings_saved',
+    status: 'ok',
+  });
 }
 
 // --- Disconnect ---

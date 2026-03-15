@@ -24,6 +24,7 @@ export class SessionManager {
       configId: hello.config_id || '',
       computer: hello.computer || '',
       connectionString: hello.connection_string || '',
+      baseIds: hello.base_ids || {},   // {ssl_id, user_id, storage_id, connect_id}
       clientId,           // Centrifugo client UUID (pub.info.client)
       status: 'awaiting_auth',
       userId: null,
