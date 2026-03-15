@@ -116,6 +116,7 @@ export function renderSystemPrompt(template, session, profile) {
     'ИдентификаторКонфигурации': session.configId || '',
     'Режим': profile?.mode || 'user',
     'VegaКонфигурация': vegaConnected,
+    'НапарникДоступен': session.naparnikToken ? 'да' : '',
     'ПамятьКонфигурации': memoryRegistry,
   };
 
@@ -157,7 +158,7 @@ export function buildMcpConfig(profile, session, toolsPort, config) {
         LYRA_SESSION_ID: session.sessionId,
         LYRA_CONFIG_NAME: session.configName || '',
         LYRA_USER_ID: session.userId || '',
-        LYRA_NAPARNIK_TOKEN: config?.naparnik?.token || '',
+        LYRA_TOOL_CALL_TIMEOUT: JSON.stringify(config.toolCallTimeout || {}),
       },
     };
   }

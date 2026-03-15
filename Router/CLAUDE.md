@@ -206,6 +206,21 @@ Claude stream-json → model-agnostic events. Состояние парсера 
 - **handleChat** (Claude мёртв, пришло сообщение) → `spawnClaudeForSession(session, text, { resume: true })`
 - **onExit + pendingMessage** (Claude упал при pending) → `spawnClaudeForSession(session, text, { resume: true })`
 
+## Очистка env при spawn Claude CLI
+
+При запуске Роутера из Claude Code (например, при разработке) дочерний процесс Claude CLI наследует переменные окружения `CLAUDECODE=1`, `CLAUDE_CODE_ENTRYPOINT=cli`, `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. Эти переменные переключают CLI с подписки на API-биллинг → ошибка "Credit balance is too low".
+
+**Решение** (`claude.mjs:57-62`): удалять эти переменные из `env` перед `spawn()`:
+
+```js
+const env = { ...process.env };
+delete env.CLAUDECODE;
+delete env.CLAUDE_CODE_ENTRYPOINT;
+delete env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
+```
+
+При запуске из обычного терминала переменных нет — проблема не проявляется. Ref: GitHub issues #2784, #573, #4690.
+
 ## Шаблонизация промптов
 
 Поддержка кириллицы в переменных через Unicode regex `[\p{L}\w]+` с флагом `/u`:

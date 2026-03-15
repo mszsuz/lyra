@@ -287,7 +287,7 @@
 													<v8:content>Группа текст сообщения</v8:content>
 												</v8:item>
 											</ToolTip>
-											<Group>Vertical</Group>
+											<Group>AlwaysHorizontal</Group>
 											<Representation>None</Representation>
 											<ShowTitle>false</ShowTitle>
 											<ExtendedTooltip name="ГруппаТекстСообщенияРасширеннаяПодсказка" id="119"/>
@@ -295,7 +295,9 @@
 												<InputField name="ТекстСообщения" id="55">
 													<DataPath>Чат1_ТекстСообщенияПользователя</DataPath>
 													<TitleLocation>None</TitleLocation>
+													<Width>40</Width>
 													<AutoMaxWidth>false</AutoMaxWidth>
+													<HorizontalStretch>true</HorizontalStretch>
 													<MultiLine>true</MultiLine>
 													<ExtendedEditMultipleValues>true</ExtendedEditMultipleValues>
 													<ContextMenu name="ТекстСообщенияКонтекстноеМеню" id="56"/>
@@ -321,26 +323,79 @@
 											<ShowTitle>false</ShowTitle>
 											<ExtendedTooltip name="ГруппаКнопкиРасширеннаяПодсказка" id="123"/>
 											<ChildItems>
-												<Button name="КомандаОтправитьСообщение" id="58">
-													<Type>UsualButton</Type>
-													<DefaultButton>true</DefaultButton>
-													<CommandName>Form.Command.Чат1_ОтправитьСообщение</CommandName>
-													<ButtonImportance>Main</ButtonImportance>
-													<ExtendedTooltip name="КомандаОтправитьСообщениеРасширеннаяПодсказка" id="59"/>
-												</Button>
+												<LabelField name="Версия" id="124">
+													<DataPath>Версия</DataPath>
+													<TitleLocation>Left</TitleLocation>
+													<HorizontalAlign>Right</HorizontalAlign>
+													<Width>7</Width>
+													<HorizontalStretch>false</HorizontalStretch>
+													<ContextMenu name="ВерсияКонтекстноеМеню" id="125"/>
+													<ExtendedTooltip name="ВерсияРасширеннаяПодсказка" id="126"/>
+												</LabelField>
 												<LabelDecoration name="Декорация1" id="163">
 													<AutoMaxWidth>false</AutoMaxWidth>
 													<HorizontalStretch>true</HorizontalStretch>
 													<ContextMenu name="Декорация1КонтекстноеМеню" id="164"/>
 													<ExtendedTooltip name="Декорация1РасширеннаяПодсказка" id="165"/>
 												</LabelDecoration>
-												<LabelField name="Версия" id="124">
-													<DataPath>Версия</DataPath>
-													<Width>10</Width>
-													<HorizontalStretch>false</HorizontalStretch>
-													<ContextMenu name="ВерсияКонтекстноеМеню" id="125"/>
-													<ExtendedTooltip name="ВерсияРасширеннаяПодсказка" id="126"/>
-												</LabelField>
+												<UsualGroup name="ГруппаНапарник" id="196">
+													<Title>
+														<v8:item>
+															<v8:lang>ru</v8:lang>
+															<v8:content>Группа напарник</v8:content>
+														</v8:item>
+													</Title>
+													<ToolTip>
+														<v8:item>
+															<v8:lang>ru</v8:lang>
+															<v8:content>Группа напарник</v8:content>
+														</v8:item>
+													</ToolTip>
+													<HorizontalSpacing>None</HorizontalSpacing>
+													<Representation>None</Representation>
+													<ShowTitle>false</ShowTitle>
+													<ExtendedTooltip name="ГруппаНапарникРасширеннаяПодсказка" id="197"/>
+													<ChildItems>
+														<HTMLDocumentField name="Интеграция1СНапарник" id="192">
+															<DataPath>Интеграция1СНапарник</DataPath>
+															<TitleLocation>None</TitleLocation>
+															<Width>2</Width>
+															<Height>1</Height>
+															<HorizontalStretch>false</HorizontalStretch>
+															<VerticalStretch>false</VerticalStretch>
+															<BorderColor>style:FormBackColor</BorderColor>
+															<ContextMenu name="Интеграция1СНапарникКонтекстноеМеню" id="193"/>
+															<ExtendedTooltip name="Интеграция1СНапарникРасширеннаяПодсказка" id="194"/>
+															<Events>
+																<Event name="OnClick">Интеграция1СНапарникПриНажатии</Event>
+															</Events>
+														</HTMLDocumentField>
+														<LabelDecoration name="Декорация3" id="219">
+															<Title formatted="false">
+																<v8:item>
+																	<v8:lang>ru</v8:lang>
+																	<v8:content>1С:Напарник</v8:content>
+																</v8:item>
+															</Title>
+															<ContextMenu name="Декорация3КонтекстноеМеню" id="220"/>
+															<ExtendedTooltip name="Декорация3РасширеннаяПодсказка" id="221"/>
+														</LabelDecoration>
+													</ChildItems>
+												</UsualGroup>
+												<LabelDecoration name="Декорация2" id="216">
+													<AutoMaxWidth>false</AutoMaxWidth>
+													<HorizontalStretch>true</HorizontalStretch>
+													<ContextMenu name="Декорация2КонтекстноеМеню" id="217"/>
+													<ExtendedTooltip name="Декорация2РасширеннаяПодсказка" id="218"/>
+												</LabelDecoration>
+												<Button name="КомандаОтправитьСообщение" id="58">
+													<Type>UsualButton</Type>
+													<DefaultButton>true</DefaultButton>
+													<CommandName>Form.Command.Чат1_ОтправитьСообщение</CommandName>
+													<PictureLocation>Right</PictureLocation>
+													<ButtonImportance>Main</ButtonImportance>
+													<ExtendedTooltip name="КомандаОтправитьСообщениеРасширеннаяПодсказка" id="59"/>
+												</Button>
 											</ChildItems>
 										</UsualGroup>
 										<UsualGroup name="Группа1" id="161">
@@ -352,28 +407,6 @@
 								</UsualGroup>
 							</ChildItems>
 						</UsualGroup>
-					</ChildItems>
-				</Page>
-				<Page name="СтраницаЛог" id="132">
-					<Title>
-						<v8:item>
-							<v8:lang>ru</v8:lang>
-							<v8:content>Лог</v8:content>
-						</v8:item>
-					</Title>
-					<ToolTip>
-						<v8:item>
-							<v8:lang>ru</v8:lang>
-							<v8:content>Страница лог</v8:content>
-						</v8:item>
-					</ToolTip>
-					<ExtendedTooltip name="СтраницаЛогРасширеннаяПодсказка" id="133"/>
-					<ChildItems>
-						<TextDocumentField name="Лог" id="134">
-							<DataPath>Лог</DataPath>
-							<ContextMenu name="ЛогКонтекстноеМеню" id="135"/>
-							<ExtendedTooltip name="ЛогРасширеннаяПодсказка" id="136"/>
-						</TextDocumentField>
 					</ChildItems>
 				</Page>
 			</ChildItems>
@@ -517,17 +550,6 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="Лог" id="11">
-			<Title>
-				<v8:item>
-					<v8:lang>ru</v8:lang>
-					<v8:content>Лог</v8:content>
-				</v8:item>
-			</Title>
-			<Type>
-				<v8:Type xmlns:d5p1="http://v8.1c.ru/8.1/data/txtedt">d5p1:TextDocument</v8:Type>
-			</Type>
-		</Attribute>
 		<Attribute name="Модель" id="12">
 			<Title>
 				<v8:item>
@@ -557,6 +579,21 @@
 				<v8:Type>xs:boolean</v8:Type>
 			</Type>
 		</Attribute>
+		<Attribute name="Интеграция1СНапарник" id="14">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Интеграция 1С:Напарник</v8:content>
+				</v8:item>
+			</Title>
+			<Type>
+				<v8:Type>xs:string</v8:Type>
+				<v8:StringQualifiers>
+					<v8:Length>0</v8:Length>
+					<v8:AllowedLength>Variable</v8:AllowedLength>
+				</v8:StringQualifiers>
+			</Type>
+		</Attribute>
 	</Attributes>
 	<Commands>
 		<Command name="Чат1_ОтправитьСообщение" id="4">
@@ -569,10 +606,15 @@
 			<ToolTip>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
-					<v8:content>Чат1 отправить сообщение</v8:content>
+					<v8:content>Отправить сообщение</v8:content>
 				</v8:item>
 			</ToolTip>
+			<Picture>
+				<xr:Ref>StdPicture.SendMessage</xr:Ref>
+				<xr:LoadTransparent>true</xr:LoadTransparent>
+			</Picture>
 			<Action>Чат1_ОтправитьСообщение</Action>
+			<Representation>TextPicture</Representation>
 		</Command>
 		<Command name="Чат1_Подключиться" id="5">
 			<Title>

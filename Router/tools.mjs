@@ -7,9 +7,10 @@ import { writeHistory } from './history.mjs';
 import * as log from './log.mjs';
 
 const TAG = 'tools';
-const TOOL_CALL_TIMEOUT = 60_000;
+let toolCallTimeouts = { default: 30_000 };
 
-export function createToolServer(sessionManager, centrifugo, getProfile) {
+export function createToolServer(sessionManager, centrifugo, getProfile, timeoutConfig) {
+  if (timeoutConfig) toolCallTimeouts = timeoutConfig;
   const server = createServer(async (req, res) => {
     // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -84,7 +85,7 @@ export function createToolServer(sessionManager, centrifugo, getProfile) {
 
       // Wait for tool_result from Chat EPF
       try {
-        const result = await waitForToolResult(session, requestId);
+        const result = await waitForToolResult(session, requestId, tool);
         const toolMs = Date.now() - toolStartTime;
         log.info(TAG, `⏱ tool_call END: ${tool} (${requestId}) ${toolMs}ms`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -106,12 +107,13 @@ export function createToolServer(sessionManager, centrifugo, getProfile) {
   return server;
 }
 
-function waitForToolResult(session, requestId) {
+function waitForToolResult(session, requestId, toolName) {
+  const timeout = toolCallTimeouts[toolName] || toolCallTimeouts.default;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       session.pendingToolCalls.delete(requestId);
-      reject(new Error(`Timeout waiting for tool_result (${TOOL_CALL_TIMEOUT}ms)`));
-    }, TOOL_CALL_TIMEOUT);
+      reject(new Error(`Timeout waiting for tool_result (${timeout}ms)`));
+    }, timeout);
 
     session.pendingToolCalls.set(requestId, { resolve, reject, timer });
   });

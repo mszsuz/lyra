@@ -9,7 +9,7 @@ import { makeSessionJWTs, makeRouterJWT } from './jwt.mjs';
 import { loadProfile, writeTempFiles } from './profiles.mjs';
 import { spawnClaude } from './claude.mjs';
 import { createToolServer, handleToolResult } from './tools.mjs';
-import { verifyAuth, checkBalance } from './users.mjs';
+import { verifyAuth, checkBalance, getUserConfig } from './users.mjs';
 import { sanitizeText } from './protocol.mjs';
 import { writeHistory, moveSessionToUser } from './history.mjs';
 import * as log from './log.mjs';
@@ -82,7 +82,7 @@ const centrifugo = new CentrifugoClient(
   config.centrifugo.apiKey,
 );
 
-const toolServer = createToolServer(sessions, centrifugo, () => profile);
+const toolServer = createToolServer(sessions, centrifugo, () => profile, config.toolCallTimeout);
 
 const toolsPort = await new Promise((resolve) => {
   toolServer.listen(config.toolsPort, '127.0.0.1', () => {
@@ -261,6 +261,10 @@ async function handleHello(data, clientUUID) {
   session.status = 'active';
   session.userId = 'mvp-user';
 
+  // Read user config (naparnik token etc.)
+  const userConfig = getUserConfig(session.userId);
+  session.naparnikToken = userConfig.naparnikToken || '';
+
   // Publish hello_ack with auto_auth flag
   const helloAck = {
     type: 'hello_ack',
@@ -269,6 +273,7 @@ async function handleHello(data, clientUUID) {
     chat_jwt: chatJwt,
     mobile_jwt: mobileJwt,
     auto_auth: true,
+    naparnik_token: userConfig.naparnikToken || '',
   };
   await centrifugo.apiPublish(session.channel, helloAck);
   writeHistory(session, 'out', helloAck);
@@ -325,7 +330,9 @@ async function handleAuth(session, data) {
     session.status = 'active';
     session.userId = user_id;
 
-    const ack = { type: 'auth_ack', session_id: session.sessionId, status: 'ok' };
+    const userConfig = getUserConfig(user_id);
+    session.naparnikToken = userConfig.naparnikToken || '';
+    const ack = { type: 'auth_ack', session_id: session.sessionId, status: 'ok', naparnik_token: session.naparnikToken };
     await centrifugo.apiPublish(session.channel, ack);
     writeHistory(session, 'out', ack);
     moveSessionToUser(session);
@@ -397,6 +404,13 @@ async function handleMobileConfirm(data, clientUUID) {
 function spawnClaudeForSession(session, initialMessage, { resume = false } = {}) {
   // Reload profile on each spawn — pick up tools.json/model.json changes without restart
   profile = loadProfile(config.profilePath);
+
+  // Filter out naparnik tool if no token
+  if (!session.naparnikToken) {
+    profile.allowedTools = profile.allowedTools.filter(t => t !== 'mcp__1c__lyra_ask_naparnik');
+    profile.clientTools = profile.clientTools.filter(t => t.name !== 'lyra_ask_naparnik');
+  }
+
   const { promptPath, mcpConfigPath } = writeTempFiles(session, profile, toolsPort, config);
 
   const { proc, sendChat, abort } = spawnClaude(session, {

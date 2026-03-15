@@ -54,9 +54,12 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
 
   log.info(TAG, `Spawning Claude CLI for session ${session.sessionId}`);
 
-  // Remove CLAUDECODE env to allow nested Claude
+  // Remove Claude Code env vars — child CLI must not think it's inside another session
+  // CLAUDECODE=1 and CLAUDE_CODE_ENTRYPOINT=cli cause billing to switch from subscription to API
   const env = { ...process.env };
   delete env.CLAUDECODE;
+  delete env.CLAUDE_CODE_ENTRYPOINT;
+  delete env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
 
   // cwd = папка пользователя — изоляция от чужих данных
   const userDir = resolve(dirname(fileURLToPath(import.meta.url)), '.users', session.userId || 'anonymous');

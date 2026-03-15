@@ -1,5 +1,5 @@
 {
-  "model": "opus",
+  "model": "sonnet",
   "mode": "founder",
   "allowedTools": [
     "mcp__1c__lyra_data_query",

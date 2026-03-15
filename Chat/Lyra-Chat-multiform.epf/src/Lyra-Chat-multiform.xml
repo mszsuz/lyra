@@ -1,14 +1,14 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.21">
-	<ExternalDataProcessor uuid="d312feef-32aa-4dfa-a520-a95cbe1bd7fa">
+	<ExternalDataProcessor uuid="c9c919f7-1120-4e35-9249-d8a5a6016512">
 		<InternalInfo>
 			<xr:ContainedObject>
 				<xr:ClassId>c3831ec8-d8d5-4f93-8a22-f9bfae07327f</xr:ClassId>
-				<xr:ObjectId>7dc6735b-d1c8-4283-af14-d0726b3c7ea1</xr:ObjectId>
+				<xr:ObjectId>19728df1-e5c1-43a0-9293-15f2b5c92edc</xr:ObjectId>
 			</xr:ContainedObject>
 			<xr:GeneratedType name="ExternalDataProcessorObject.ЛираЧат" category="Object">
-				<xr:TypeId>1f2c6d26-a1ae-4fd4-b26d-b724181b03c8</xr:TypeId>
-				<xr:ValueId>c781f505-24a9-4740-b081-8f6effafbab1</xr:ValueId>
+				<xr:TypeId>5ef5f22c-f931-4203-b2f9-2641d099d057</xr:TypeId>
+				<xr:ValueId>e7c33c9a-d52b-4aad-be6b-d94b25d90d4b</xr:ValueId>
 			</xr:GeneratedType>
 		</InternalInfo>
 		<Properties>
@@ -19,16 +19,56 @@
 					<v8:content>Лира: Чат</v8:content>
 				</v8:item>
 			</Synonym>
-			<Comment>26.03.14.4</Comment>
+			<Comment>26.03.15.3</Comment>
 			<DefaultForm>ExternalDataProcessor.ЛираЧат.Form.Форма</DefaultForm>
 			<AuxiliaryForm/>
 		</Properties>
 		<ChildObjects>
+			<Attribute uuid="10abdaaf-0774-4df0-af72-0f6aa3397799">
+				<Properties>
+					<Name>Токен1СНапарник</Name>
+					<Synonym>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>Токен сервиса 1С:Напарник</v8:content>
+						</v8:item>
+					</Synonym>
+					<Comment>https://code.1c.ai</Comment>
+					<Type>
+						<v8:Type>xs:string</v8:Type>
+						<v8:StringQualifiers>
+							<v8:Length>100</v8:Length>
+							<v8:AllowedLength>Variable</v8:AllowedLength>
+						</v8:StringQualifiers>
+					</Type>
+					<PasswordMode>false</PasswordMode>
+					<Format/>
+					<EditFormat/>
+					<ToolTip/>
+					<MarkNegatives>false</MarkNegatives>
+					<Mask/>
+					<MultiLine>false</MultiLine>
+					<ExtendedEdit>false</ExtendedEdit>
+					<MinValue xsi:nil="true"/>
+					<MaxValue xsi:nil="true"/>
+					<FillChecking>DontCheck</FillChecking>
+					<ChoiceFoldersAndItems>Items</ChoiceFoldersAndItems>
+					<ChoiceParameterLinks/>
+					<ChoiceParameters/>
+					<QuickChoice>Auto</QuickChoice>
+					<CreateOnInput>Auto</CreateOnInput>
+					<ChoiceForm/>
+					<LinkByType/>
+					<ChoiceHistoryOnInput>Auto</ChoiceHistoryOnInput>
+				</Properties>
+			</Attribute>
 			<Form>Форма</Form>
 			<Form>МодульОбщий</Form>
 			<Form>МодульТранспорт</Form>
 			<Form>МодульОбработка</Form>
 			<Form>МодульЧат</Form>
+			<Form>МодульНапарник</Form>
+			<Form>Настройки</Form>
 			<Template>ЕХТ_Чат_ДвоичныеДанныеПриложения</Template>
 			<Template>ЕХТ_Чат_ДвоичныеДанныеКартинкаФонаСветлая</Template>
 			<Template>ЕХТ_Чат_ДвоичныеДанныеКартинкаФонаТемная</Template>

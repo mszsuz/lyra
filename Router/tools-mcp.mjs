@@ -16,9 +16,12 @@ const ROUTER_URL = process.env.LYRA_TOOLS_URL;
 const SESSION_ID = process.env.LYRA_SESSION_ID;
 const CONFIG_NAME = (process.env.LYRA_CONFIG_NAME || '').replace(/[/\\]/g, '').replace(/^\.+/, '_');
 const USER_ID = (process.env.LYRA_USER_ID || '').replace(/[/\\]/g, '').replace(/^\.+/, '_');
-const NAPARNIK_TOKEN = process.env.LYRA_NAPARNIK_TOKEN || '';
-const NAPARNIK_BASE_URL = 'https://code.1c.ai';
-const TOOL_CALL_TIMEOUT = 60_000;
+const TOOL_CALL_TIMEOUTS = (() => {
+  try { return JSON.parse(process.env.LYRA_TOOL_CALL_TIMEOUT || '{}'); } catch { return {}; }
+})();
+function getToolTimeout(toolName) {
+  return TOOL_CALL_TIMEOUTS[toolName] || TOOL_CALL_TIMEOUTS.default || 30_000;
+}
 
 if (!ROUTER_URL) die('LYRA_TOOLS_URL env not set');
 if (!SESSION_ID) die('LYRA_SESSION_ID env not set');
@@ -80,16 +83,8 @@ rl.on('line', async (line) => {
       return;
     }
 
-    // Напарник — handle locally (direct API call to code.1c.ai)
-    if (toolName === 'lyra_ask_naparnik') {
-      try {
-        const result = await askNaparnik(toolArgs.question);
-        respond(id, { content: [{ type: 'text', text: result }] });
-      } catch (err) {
-        respond(id, { content: [{ type: 'text', text: err.message }], isError: true });
-      }
-      return;
-    }
+    // Напарник — goes through Centrifugo → Chat EPF (HTML/JS fetch to code.1c.ai)
+    // Token is per-user, stored in Chat after auth
 
     // Memory tools — handle locally (no HTTP roundtrip)
     if (toolName.startsWith('lyra_memory_')) {
@@ -231,77 +226,6 @@ function updateRegistry(dir, name, description) {
   writeFileSync(registryPath, lines.join('\n') + '\n', 'utf-8');
 }
 
-// --- Напарник (code.1c.ai) ---
-
-async function askNaparnik(question) {
-  if (!NAPARNIK_TOKEN) throw new Error('Токен Напарника не настроен (LYRA_NAPARNIK_TOKEN)');
-  if (!question) throw new Error('Не указан вопрос');
-
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': NAPARNIK_TOKEN,
-  };
-
-  // 1. Создать сессию
-  const sessionRes = await fetch(`${NAPARNIK_BASE_URL}/chat_api/v1/conversations/`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ skill_name: 'raw', is_chat: true }),
-  });
-  if (!sessionRes.ok) {
-    const text = await sessionRes.text();
-    throw new Error(`Напарник: ошибка создания сессии (${sessionRes.status}): ${text}`);
-  }
-  const session = await sessionRes.json();
-  const sessionId = session.uuid;
-  log(`naparnik session: ${sessionId}`);
-
-  // 2. Отправить вопрос (SSE response)
-  const msgRes = await fetch(`${NAPARNIK_BASE_URL}/chat_api/v1/conversations/${sessionId}/messages`, {
-    method: 'POST',
-    headers: { ...headers, 'Accept': 'text/event-stream' },
-    body: JSON.stringify({
-      role: 'user',
-      content: { content: { instruction: question } },
-      parent_uuid: null,
-    }),
-  });
-  if (!msgRes.ok) {
-    const text = await msgRes.text();
-    throw new Error(`Напарник: ошибка отправки (${msgRes.status}): ${text}`);
-  }
-
-  // 3. Парсить SSE
-  const sseText = await msgRes.text();
-  const result = parseSseResponse(sseText);
-  log(`naparnik response: ${result.length} chars`);
-  return result;
-}
-
-function parseSseResponse(sseText) {
-  const chunks = [];
-  for (const line of sseText.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('data:')) continue;
-    const dataStr = trimmed.slice(5).trim();
-    if (dataStr === '[DONE]') break;
-    try {
-      const data = JSON.parse(dataStr);
-      // content_delta format
-      if (data.content_delta?.content) {
-        chunks.push(data.content_delta.content);
-      }
-      // OpenAI-like choices format
-      else if (data.choices?.[0]?.delta?.content) {
-        chunks.push(data.choices[0].delta.content);
-      }
-    } catch { /* skip non-JSON lines */ }
-  }
-  const text = chunks.join('');
-  // Удалить <thinking>/<think> теги
-  return text.replace(/<\/?thinking>/g, '').replace(/<\/?think>/g, '').trim();
-}
-
 // --- HTTP communication with Router ---
 
 async function fetchTools() {
@@ -318,7 +242,8 @@ async function fetchTools() {
 
 async function callTool(toolName, toolArgs) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TOOL_CALL_TIMEOUT);
+  const timeout = getToolTimeout(toolName);
+  const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
     const res = await fetch(ROUTER_URL, {

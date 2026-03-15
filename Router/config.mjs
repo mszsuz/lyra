@@ -58,6 +58,9 @@ export function loadConfig() {
       path: raw.claude?.path || process.env.CLAUDE_PATH || 'claude',
       model: raw.claude?.model || 'sonnet',
     },
+    toolCallTimeout: typeof raw.toolCallTimeout === 'object'
+      ? { default: 30_000, ...raw.toolCallTimeout }
+      : { default: raw.toolCallTimeout || 30_000 },
     toolsPort: raw.toolsPort || 0,
     profilePath: raw.profilePath || './profiles/default',
     logLevel: raw.logLevel || 'info',

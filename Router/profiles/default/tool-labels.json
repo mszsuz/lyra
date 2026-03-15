@@ -16,5 +16,9 @@
   "mcp__1c__lyra_memory_list": "Проверяю память...",
   "mcp__1c__lyra_memory_read": "Загружаю знание...",
   "mcp__1c__lyra_memory_save": "Сохраняю знание...",
-  "mcp__1c__lyra_ask_naparnik": "Спрашиваю Напарника..."
+  "mcp__1c__lyra_ask_naparnik": "Общаюсь с Напарником...",
+  "mcp__1c__lyra_ask_naparnik:explain": "Напарник объясняет код...",
+  "mcp__1c__lyra_ask_naparnik:review": "Напарник проверяет код...",
+  "mcp__1c__lyra_ask_naparnik:modify": "Напарник рефакторит код...",
+  "mcp__1c__lyra_ask_naparnik:direct": "Напарник проверяет синтаксис..."
 }

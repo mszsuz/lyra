@@ -99,11 +99,14 @@
     },
     {
       "name": "lyra_ask_naparnik",
-      "description": "Задать вопрос ИИ-ассистенту 1С:Напарник (code.1c.ai). Используй когда нужна помощь по языку 1С, синтаксису, типовым решениям, проверке кода. Напарник — это официальный ИИ-помощник от 1С.",
+      "description": "Задать вопрос ИИ-ассистенту 1С:Напарник (code.1c.ai) — официальный ИИ-помощник от 1С. Умеет: отвечать на вопросы по языку 1С (skill=custom), объяснять код (skill=explain), делать code review (skill=review), рефакторить код (skill=modify). Может проверять синтаксис BSL (mode=direct, direct_tool=mcp__syntax-checker__validate). При explain/review/modify передавай код в поле question.",
       "input_schema": {
         "type": "object",
         "properties": {
-          "question": { "type": "string", "description": "Вопрос к Напарнику на русском языке" }
+          "question": { "type": "string", "description": "Вопрос или код на русском языке" },
+          "skill": { "type": "string", "enum": ["custom", "explain", "review", "modify"], "description": "Режим работы: custom (по умолчанию) — универсальный, explain — объяснение кода, review — code review, modify — рефакторинг" },
+          "mode": { "type": "string", "enum": ["standard", "direct"], "description": "standard (по умолчанию) — Напарник сам решает какие инструменты вызвать, direct — вызвать конкретный инструмент (указать в direct_tool)" },
+          "direct_tool": { "type": "string", "description": "Имя инструмента для direct mode (например mcp__syntax-checker__validate для проверки синтаксиса BSL)" }
         },
         "required": ["question"]
       }
