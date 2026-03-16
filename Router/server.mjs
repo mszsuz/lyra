@@ -72,7 +72,26 @@ log.setLogFile();  // router.log in Router/
 log.info(TAG, 'Starting Lyra Router');
 
 let profile = loadProfile(config.profilePath);
-const sessions = new SessionManager(config.sessionTTL);
+const sessions = new SessionManager(config.sessionTTL, {
+  warningBefore: config.sessionWarningBefore || 5 * 60 * 1000,
+  onWarning: async (sessionId, session, remainingMs) => {
+    try {
+      const remainingSeconds = Math.round(remainingMs / 1000);
+      await centrifugo.apiPublish(session.channel, { type: 'session_warning', remaining_seconds: remainingSeconds });
+      log.info(TAG, `session_warning published for ${sessionId} (${remainingSeconds}s remaining)`);
+    } catch (e) {
+      log.warn(TAG, `Failed to publish session_warning for ${sessionId}: ${e.message}`);
+    }
+  },
+  onExpire: async (sessionId, session) => {
+    try {
+      await centrifugo.apiPublish(session.channel, { type: 'session_expired' });
+      log.info(TAG, `session_expired published for ${sessionId}`);
+    } catch (e) {
+      log.warn(TAG, `Failed to publish session_expired for ${sessionId}: ${e.message}`);
+    }
+  },
+});
 
 // --- Start HTTP tool server ---
 
@@ -161,9 +180,12 @@ centrifugo.onPush((push) => {
     const session = sessions.getByChannel(channel);
     if (!session) return;
 
-    session.lastActivity = Date.now();
-
     writeHistory(session, 'in', data);
+
+    // Обновлять lastActivity только при действиях пользователя (не при push от Роутера)
+    if (['chat', 'tool_result', 'auth', 'abort', 'disconnect', 'settings_save'].includes(data.type)) {
+      sessions.touch(session.sessionId);
+    }
 
     switch (data.type) {
       case 'chat':

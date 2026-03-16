@@ -16,7 +16,8 @@
     "lyra_ask_naparnik": 300000
   },
   "toolsPort": 0,
-  "profilePath": "./profiles/default",
+  "profilePath": "./profiles/founder",
   "logLevel": "debug",
-  "sessionTTL": 1800000
+  "sessionTTL": 14400000,
+  "sessionWarningBefore": 300000
 }

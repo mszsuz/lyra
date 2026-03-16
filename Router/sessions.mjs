@@ -6,11 +6,14 @@ import * as log from './log.mjs';
 const TAG = 'sessions';
 
 export class SessionManager {
-  constructor(ttl = 30 * 60 * 1000) {
+  constructor(ttl = 24 * 60 * 60 * 1000, { onWarning = null, onExpire = null, warningBefore = 5 * 60 * 1000 } = {}) {
     this.sessions = new Map();      // sessionId → Session
     this.byFormId = new Map();      // formId → sessionId
     this.ttl = ttl;
-    this._cleanupTimer = setInterval(() => this._cleanup(), 5 * 60 * 1000);
+    this.warningBefore = warningBefore;  // за сколько мс до TTL предупреждать
+    this._onWarning = onWarning;    // async (sessionId, session) => {} — предупреждение
+    this._onExpire = onExpire;      // async (sessionId, session) => {} — перед удалением
+    this._cleanupTimer = setInterval(() => this._cleanup(), 60 * 1000);
   }
 
   create(hello, clientId) {
@@ -37,6 +40,7 @@ export class SessionManager {
       pendingToolCalls: new Map(),
       _sendChat: null,
       _abort: null,
+      _warningSent: false,
       created: Date.now(),
       lastActivity: Date.now(),
     };
@@ -55,8 +59,19 @@ export class SessionManager {
   }
 
   get(sessionId) {
+    return this.sessions.get(sessionId) || null;
+  }
+
+  // Обновить lastActivity — вызывать только при входящем действии пользователя (chat, tool_result, auth)
+  touch(sessionId) {
     const s = this.sessions.get(sessionId);
-    if (s) s.lastActivity = Date.now();
+    if (s) {
+      s.lastActivity = Date.now();
+      if (s._warningSent) {
+        s._warningSent = false;
+        log.info(TAG, `Warning reset for session ${sessionId} (activity detected)`);
+      }
+    }
     return s;
   }
 
@@ -93,11 +108,31 @@ export class SessionManager {
     }
   }
 
-  _cleanup() {
+  async _cleanup() {
     const now = Date.now();
     for (const [id, s] of this.sessions) {
-      if (now - s.lastActivity > this.ttl) {
+      const idle = now - s.lastActivity;
+
+      // Фаза 1: предупреждение (за warningBefore мс до TTL)
+      if (!s._warningSent && idle > this.ttl - this.warningBefore) {
+        s._warningSent = true;
+        log.info(TAG, `Warning for session ${id} (idle ${Math.round(idle / 1000)}s)`);
+        if (this._onWarning) {
+          const remaining = this.ttl - idle;
+          try { await this._onWarning(id, s, remaining); } catch (e) {
+            log.warn(TAG, `onWarning error for ${id}: ${e.message}`);
+          }
+        }
+      }
+
+      // Фаза 2: завершение
+      if (idle > this.ttl) {
         log.info(TAG, `TTL expired for session ${id}`);
+        if (this._onExpire) {
+          try { await this._onExpire(id, s); } catch (e) {
+            log.warn(TAG, `onExpire error for ${id}: ${e.message}`);
+          }
+        }
         this.remove(id);
       }
     }
