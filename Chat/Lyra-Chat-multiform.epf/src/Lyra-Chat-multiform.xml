@@ -19,7 +19,7 @@
 					<v8:content>Лира: Чат</v8:content>
 				</v8:item>
 			</Synonym>
-			<Comment>26.03.16.11</Comment>
+			<Comment>26.03.17.1</Comment>
 			<DefaultForm>ExternalDataProcessor.ЛираЧат.Form.Форма</DefaultForm>
 			<AuxiliaryForm/>
 		</Properties>
@@ -177,11 +177,12 @@
 				</Properties>
 			</Attribute>
 			<Form>Форма</Form>
-			<Form>МодульОбщий</Form>
-			<Form>МодульТранспорт</Form>
-			<Form>МодульОбработка</Form>
-			<Form>МодульЧат</Form>
 			<Form>МодульНапарник</Form>
+			<Form>МодульОбработка</Form>
+			<Form>МодульОбщий</Form>
+			<Form>МодульСессия</Form>
+			<Form>МодульТранспорт</Form>
+			<Form>МодульЧат</Form>
 			<Form>Настройки</Form>
 			<Template>ЕХТ_Чат_ДвоичныеДанныеПриложения</Template>
 			<Template>ЕХТ_Чат_ДвоичныеДанныеКартинкаФонаСветлая</Template>
