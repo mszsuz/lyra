@@ -147,16 +147,14 @@
 	|(async function() {
 	|  var TOKEN = """ + ТокенJS + """;
 	|  try {
-	|    var res = await fetch('https://code.1c.ai/chat_api/v1/conversations/', {
-	|      method: 'POST',
+	|    var res = await fetch('https://code.1c.ai/chat_api/v1/skills/', {
+	|      method: 'GET',
 	|      headers: {
-	|        'Content-Type': 'application/json; charset=utf-8',
 	|        'Authorization': TOKEN,
 	|        'Origin': 'https://code.1c.ai',
 	|        'Referer': 'https://code.1c.ai/chat/',
 	|        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-	|      },
-	|      body: JSON.stringify({ skill_name: 'custom', is_chat: true, ui_language: 'russian', programming_language: '1c' })
+	|      }
 	|    });
 	|    var a = document.createElement('a');
 	|    a.href = 'v8:naparnik/status/' + (res.ok ? 'ok' : 'error');
