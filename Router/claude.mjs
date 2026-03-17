@@ -7,6 +7,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { StringDecoder } from 'node:string_decoder';
 import { createParser } from './protocol.mjs';
+import { writeClaude } from './history.mjs';
 import * as log from './log.mjs';
 
 const TAG = 'claude';
@@ -30,6 +31,7 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
     '--mcp-config', mcpConfigPath,
     '--dangerously-skip-permissions',
     '--strict-mcp-config',
+    '--disallowedTools', 'Bash,Glob,Grep,Read,Edit,Write,NotebookEdit,WebFetch,WebSearch,TodoWrite,Task,TaskOutput,TaskStop,EnterPlanMode,ExitPlanMode,EnterWorktree,ExitWorktree,SendMessage,TeamCreate,TeamDelete,CronCreate,CronDelete,CronList,ToolSearch,Skill,LSP,ListMcpResourcesTool,ReadMcpResourceTool,AskUserQuestion',
     '--settings', JSON.stringify({ disableAllHooks: true }),
   ];
 
@@ -92,6 +94,7 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
     for (const line of lines) {
       if (!line.trim()) continue;
       log.debug(TAG, `stdout: ${line.slice(0, 200)}`);
+      writeClaude(session, line);
 
       // Detect init event and MCP tool usage
       try {
@@ -114,14 +117,11 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
                 session._turnResearchTools = true;
               }
               // Emit tool_status for client UI (progress indicator)
-              // Skip internal CLI tools (ToolSearch, etc.) — not useful for user
-              if (block.name !== 'ToolSearch') {
-                onEvent({
-                  type: 'tool_status',
-                  tool: block.name,
-                  description: getToolDescription(block.name, profile.toolLabels),
-                });
-              }
+              onEvent({
+                type: 'tool_status',
+                tool: block.name,
+                description: getToolDescription(block.name, profile.toolLabels),
+              });
             }
             if (block.type === 'tool_result') {
               const resultStr = typeof block.content === 'string' ? block.content.slice(0, 100) : JSON.stringify(block.content).slice(0, 100);
@@ -183,6 +183,7 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
       });
       session._chatSentTime = Date.now();
       proc.stdin.write(msg + '\n');
+      writeClaude(session, msg);
       session.streaming = true;
       log.info(TAG, `Sent chat: ${text.slice(0, 100)}`);
     } else {

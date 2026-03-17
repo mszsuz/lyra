@@ -79,7 +79,7 @@ Router/
 ├── .lobby/<session_id>/ — данные неавторизованных сессий (в .gitignore)
 │   ├── system-prompt.md   — отрендеренный промпт
 │   ├── mcp-config.json    — MCP config для Claude CLI
-│   ├── history.jsonl      — JSONL-лог всех событий (in/out)
+│   ├── log.jsonl          — единый JSONL-лог сессии (клиент + Claude CLI)
 │   └── attach/            — вложения (если есть)
 ├── .users/<user_id>/   — данные пользователей (в .gitignore)
 │   ├── profile.json       — профиль (имя, уровень, токен, timestamps)
@@ -228,6 +228,12 @@ delete env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
 
 При запуске из обычного терминала переменных нет — проблема не проявляется. Ref: GitHub issues #2784, #573, #4690.
 
+## Блокировка встроенных инструментов Claude CLI
+
+Claude CLI по умолчанию предоставляет модели встроенные инструменты (Bash, Grep, Glob, Read, Edit, Write и др.). Лире они не нужны — вся работа с базой 1С через MCP-инструменты (lyra_*, Vega, mcp-1c-docs). Встроенные инструменты — дыра в безопасности (Bash = произвольные команды на сервере) и источник неэффективности (модель грепает закешированные файлы вместо повторного MCP-вызова).
+
+**Решение** (`claude.mjs`): `--disallowedTools` со списком всех встроенных инструментов при spawn.
+
 ## Шаблонизация промптов
 
 Поддержка кириллицы в переменных через Unicode regex `[\p{L}\w]+` с флагом `/u`:
@@ -261,12 +267,13 @@ delete env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
 
 ## История сессий (history.mjs)
 
-Каждая сессия пишет JSONL-лог всех событий, проходящих через роутер. Файл `history.jsonl` в папке сессии (`.lobby/<session_id>/` до авторизации, `.users/<user_id>/<session_id>/` после).
+Каждая сессия пишет единый JSONL-лог `log.jsonl` в папке сессии (`.lobby/<session_id>/` до авторизации, `.users/<user_id>/<session_id>/` после).
 
-Формат записи: `{"ts":"ISO","dir":"in|out","type":"...","...":"..."}`
+Формат записи: `{"ts":"ISO","src":"in|out|claude","type":"...","...":"..."}`
 
-- `dir: "in"` — входящие (от клиента: hello, chat, tool_result, auth, abort, disconnect)
-- `dir: "out"` — исходящие (к клиенту: hello_ack, thinking_start/end, assistant_end, tool_call, auth_ack)
+- `src: "in"` — входящие от клиента (hello, chat, tool_result, auth, abort, disconnect)
+- `src: "out"` — исходящие к клиенту (hello_ack, assistant_end, tool_call, auth_ack)
+- `src: "claude"` — события Claude CLI (system/init, assistant с tool_use, user с tool_result, result с cost/usage, rate_limit_event). Стриминговые дельты (stream_event) не пишутся
 - Вложения из массива `attach` сохраняются в подпапку `attach/`, в JSONL пишутся относительные пути
 - При успешной авторизации (`handleAuth`) папка сессии переносится из `.lobby/` в `.users/<userId>/`
 

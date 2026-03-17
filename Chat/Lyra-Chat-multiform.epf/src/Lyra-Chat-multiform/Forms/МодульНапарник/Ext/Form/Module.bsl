@@ -124,7 +124,7 @@
 КонецПроцедуры
 
 // Проверяет доступность API Напарника и устанавливает индикатор.
-// Без токена — серый, с токеном — проверяет GET /chat_api/v1/skills/.
+// Без токена — серый, с токеном — проверяет POST /chat_api/v1/conversations/.
 // Результат придёт асинхронно через callback в ПриНажатии.
 //
 // Параметры:
@@ -147,14 +147,17 @@
 	|(async function() {
 	|  var TOKEN = """ + ТокенJS + """;
 	|  try {
-	|    var res = await fetch('https://code.1c.ai/chat_api/v1/skills/', {
-	|      method: 'GET',
+	|    var res = await fetch('https://code.1c.ai/chat_api/v1/conversations/', {
+	|      method: 'POST',
 	|      headers: {
+	|        'Content-Type': 'application/json; charset=utf-8',
 	|        'Authorization': TOKEN,
 	|        'Origin': 'https://code.1c.ai',
 	|        'Referer': 'https://code.1c.ai/chat/',
 	|        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-	|      }
+	|      },
+	|      body: JSON.stringify({skill_name:'custom',is_chat:true,ui_language:'russian',programming_language:'1c'}),
+	|      signal: AbortSignal.timeout(10000)
 	|    });
 	|    var a = document.createElement('a');
 	|    a.href = 'v8:naparnik/status/' + (res.ok ? 'ok' : 'error');
@@ -363,6 +366,8 @@
 	|    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 	|  };
 	|
+	|  var TIMEOUT = 30000;
+	|
 	|  function callback(type, data) {
 	|    var a = document.createElement('a');
 	|    a.href = 'v8:naparnik/' + type + '/' + data;
@@ -377,7 +382,8 @@
 	|      var convRes = await fetch(BASE + '/chat_api/v1/conversations/', {
 	|        method: 'POST',
 	|        headers: Object.assign({}, headers, { 'Session-Id': '' }),
-	|        body: JSON.stringify({ skill_name: 'custom', is_chat: true, ui_language: 'russian', programming_language: '1c' })
+	|        body: JSON.stringify({ skill_name: 'custom', is_chat: true, ui_language: 'russian', programming_language: '1c' }),
+	|        signal: AbortSignal.timeout(TIMEOUT)
 	|      });
 	|      if (!convRes.ok) {
 	|        callback('error', 'Ошибка создания сессии Напарника: HTTP ' + convRes.status);
@@ -443,7 +449,8 @@
 	|      var msgRes = await fetch(msgUrl, {
 	|        method: 'POST',
 	|        headers: Object.assign({}, headers, { 'Accept': 'text/event-stream' }),
-	|        body: JSON.stringify(payload)
+	|        body: JSON.stringify(payload),
+	|        signal: AbortSignal.timeout(TIMEOUT)
 	|      });
 	|      if (!msgRes.ok) {
 	|        callback('error', 'Ошибка отправки вопроса Напарнику: HTTP ' + msgRes.status);

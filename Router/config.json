@@ -13,7 +13,7 @@
   },
   "toolCallTimeout": {
     "default": 30000,
-    "lyra_ask_naparnik": 300000
+    "lyra_ask_naparnik": 60000
   },
   "toolsPort": 0,
   "profilePath": "./profiles/founder",

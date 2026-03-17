@@ -1,4 +1,5 @@
-// Session history — JSONL log of all events passing through the router
+// Session log — unified JSONL log of all events in a session
+// Sources: client (in/out), Claude CLI (claude), stdin to Claude (chat_to_claude)
 // Attachments (attach array) are saved as files, replaced with relative paths
 
 import { mkdirSync, appendFileSync, writeFileSync, renameSync } from 'node:fs';
@@ -7,8 +8,10 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
+const LOG_FILE = 'log.jsonl';
+
 /**
- * Get or create session directory, return path to history.jsonl
+ * Get or create session directory
  */
 function ensureSessionDir(session) {
   if (!session._historyDir) {
@@ -17,7 +20,7 @@ function ensureSessionDir(session) {
       : resolve(__dirname, '.lobby', session.sessionId);
     mkdirSync(base, { recursive: true });
     session._historyDir = base;
-    session._historyFile = join(base, 'history.jsonl');
+    session._logFile = join(base, LOG_FILE);
     session._attachCounter = 0;
   }
   return session._historyDir;
@@ -65,13 +68,7 @@ function extractAttachments(session, data) {
   return result;
 }
 
-/**
- * Write an event to session history
- * @param {object} session
- * @param {'in'|'out'} direction — 'in' = from client, 'out' = to client
- * @param {object} data — event data
- */
-// Fields that must never be written to history
+// Fields that must never be written to log
 const SENSITIVE_KEYS = ['naparnik_token', 'chat_jwt', 'mobile_jwt', 'token', 'api_key', 'secret'];
 
 function stripSensitive(obj) {
@@ -87,18 +84,37 @@ function stripSensitive(obj) {
   return result;
 }
 
-export function writeHistory(session, direction, data) {
+function writeEntry(session, entry) {
   try {
     ensureSessionDir(session);
-    const cleaned = stripSensitive(extractAttachments(session, data));
-    const entry = {
-      ts: new Date().toISOString(),
-      dir: direction,
-      ...cleaned,
-    };
-    appendFileSync(session._historyFile, JSON.stringify(entry) + '\n', 'utf-8');
+    appendFileSync(session._logFile, JSON.stringify(entry) + '\n', 'utf-8');
   } catch {
-    // History write should never break the router
+    // Log write should never break the router
+  }
+}
+
+/**
+ * Write a protocol event (client ↔ router)
+ * @param {'in'|'out'} direction — 'in' = from client, 'out' = to client
+ */
+export function writeHistory(session, direction, data) {
+  const cleaned = stripSensitive(extractAttachments(session, data));
+  writeEntry(session, { ts: new Date().toISOString(), src: direction, ...cleaned });
+}
+
+/**
+ * Write a raw Claude CLI event (stdout)
+ * Skips stream_event (text_delta, thinking_delta, input_json_delta) — noise.
+ * Keeps: system (init), assistant (tool_use), user (tool_result), result (cost/usage), rate_limit_event.
+ */
+export function writeClaude(session, line) {
+  try {
+    const ev = JSON.parse(line);
+    // Skip all streaming deltas — assistant_end has the full text
+    if (ev.type === 'stream_event') return;
+    writeEntry(session, { ts: new Date().toISOString(), src: 'claude', ...ev });
+  } catch {
+    // Unparseable line — skip
   }
 }
 
@@ -118,7 +134,7 @@ export function moveSessionToUser(session) {
     mkdirSync(resolve(__dirname, '.users', session.userId), { recursive: true });
     renameSync(currentDir, userDir);
     session._historyDir = userDir;
-    session._historyFile = join(userDir, 'history.jsonl');
+    session._logFile = join(userDir, LOG_FILE);
   } catch {
     // If rename fails (cross-device), keep in lobby
   }
