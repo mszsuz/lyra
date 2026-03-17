@@ -472,9 +472,9 @@
 	|      console.log('[NAPARNIK] tool_calls: ' + sse.toolCalls.map(function(tc) { return (tc.function||{}).name; }).join(', '));
 	|      var toolContent = sse.toolCalls.map(function(tc) {
 	|        return {
-	|          content: JSON.stringify({ id: tc.id, type: tc.type || 'function', function: tc.function }),
-	|          name: (tc.function || {}).name || '',
-	|          tool_call_id: tc.id
+	|          status: 'accepted',
+	|          tool_call_id: tc.id,
+	|          content: null
 	|        };
 	|      });
 	|      payload = {
