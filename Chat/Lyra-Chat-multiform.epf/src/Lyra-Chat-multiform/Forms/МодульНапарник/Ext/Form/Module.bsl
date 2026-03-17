@@ -366,7 +366,7 @@
 	|    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 	|  };
 	|
-	|  var TIMEOUT = 30000;
+	|  var TIMEOUT = 90000;
 	|
 	|  function callback(type, data) {
 	|    var a = document.createElement('a');
