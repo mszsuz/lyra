@@ -228,6 +228,7 @@
 		Привет.Вставить("computer", ДанныеБазы.computer);
 		Привет.Вставить("connection_string", ДанныеБазы.connection_string);
 		Привет.Вставить("base_ids", ДанныеБазы.base_ids);
+		Привет.Вставить("epf_version", ДанныеБазы.epf_version);
 	КонецЕсли;
 
 	Транспорт.ОтправитьHello(Привет);
