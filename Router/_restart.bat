@@ -12,7 +12,7 @@ echo Stopped router (PID %OLD_PID%)
 ping -n 2 127.0.0.1 >nul
 
 :start
-start "Lyra Router" /min cmd /c "node server.mjs"
+powershell -NoProfile -Command "Start-Process node -ArgumentList 'server.mjs' -WindowStyle Hidden"
 ping -n 4 127.0.0.1 >nul
 
 if not exist router.pid goto fail
