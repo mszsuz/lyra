@@ -152,7 +152,9 @@
 	|      headers: {
 	|        'Content-Type': 'application/json',
 	|        'Authorization': TOKEN,
-	|        'Session-Id': ''
+	|        'Origin': 'https://code.1c.ai',
+	|        'Referer': 'https://code.1c.ai/chat/',
+	|        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 	|      },
 	|      body: JSON.stringify({skill_name:'custom',is_chat:true,ui_language:'russian',programming_language:'1c'}),
 	|      signal: AbortSignal.timeout(10000)
@@ -346,7 +348,7 @@
 	|<html><head><meta charset=""utf-8""></head>
 	|<body><script>
 	|(async function() {
-	|  console.log('[NAPARNIK] JS started');
+	|  console.log('[NAPARNIK] JS started v18.3');
 	|  var BASE = 'https://code.1c.ai';
 	|  var TOKEN = """ + ТокенJS + """;
 	|  var QUESTION = """ + ВопросJS + """;
@@ -359,8 +361,9 @@
 	|  var headers = {
 	|    'Content-Type': 'application/json',
 	|    'Authorization': TOKEN,
-	|    'Session-Id': '',
-	|    'Accept': 'text/event-stream'
+	|    'Origin': 'https://code.1c.ai',
+	|    'Referer': 'https://code.1c.ai/chat/',
+	|    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 	|  };
 	|
 	|  var TIMEOUT = 90000;
@@ -376,12 +379,13 @@
 	|    console.log('[NAPARNIK] Starting fetch, CONV_ID=' + CONV_ID);
 	|    // 1. Создать conversation если нет существующей
 	|    if (!CONV_ID) {
-	|      var convRes = await fetch(BASE + '/chat_api/v1/conversations/', {
+	|      var fetchOpts = {
 	|        method: 'POST',
 	|        headers: headers,
-	|        body: JSON.stringify({ skill_name: 'custom', is_chat: true, ui_language: 'russian', programming_language: '1c' }),
-	|        signal: AbortSignal.timeout(TIMEOUT)
-	|      });
+	|        body: JSON.stringify({ skill_name: 'custom', is_chat: true, ui_language: 'russian', programming_language: '1c' })
+	|      };
+	|      try { fetchOpts.signal = AbortSignal.timeout(TIMEOUT); } catch(e) { console.log('[NAPARNIK] AbortSignal.timeout not supported'); }
+	|      var convRes = await fetch(BASE + '/chat_api/v1/conversations/', fetchOpts);
 	|      if (!convRes.ok) {
 	|        callback('error', 'Ошибка создания сессии Напарника: HTTP ' + convRes.status);
 	|        return;
@@ -443,12 +447,9 @@
 	|    var MAX_ROUNDS = 15;
 	|
 	|    for (var round = 0; round < MAX_ROUNDS; round++) {
-	|      var msgRes = await fetch(msgUrl, {
-	|        method: 'POST',
-	|        headers: headers,
-	|        body: JSON.stringify(payload),
-	|        signal: AbortSignal.timeout(TIMEOUT)
-	|      });
+	|      var msgOpts = { method: 'POST', headers: headers, body: JSON.stringify(payload) };
+	|      try { msgOpts.signal = AbortSignal.timeout(TIMEOUT); } catch(e) {}
+	|      var msgRes = await fetch(msgUrl, msgOpts);
 	|      if (!msgRes.ok) {
 	|        callback('error', 'Ошибка отправки вопроса Напарнику: HTTP ' + msgRes.status);
 	|        return;
