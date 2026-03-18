@@ -1,14 +1,14 @@
-﻿
+
 // МодульНапарник — интеграция с 1С:Напарник (code.1c.ai).
 // Служебная форма-модуль с HTML-полем для HTTP-запросов к API Напарника.
-// 1С клиент не имеет HTTP-клиента — запросы через fetch() в HTML-поле.
+// 1С клиент не имеет HTTP-клиента — запросы через XMLHttpRequest в HTML-поле.
 //
 // Поддерживает диалог: хранит conversation_id и last_message_uuid
 // между вызовами, Напарник видит историю и отвечает в контексте.
 //
 // Поток: МодульЧат → ЗадатьВопрос(Токен, Вопрос, ИДЗапроса)
-//        → HTML/JS fetch к code.1c.ai (SSE)
-//        → JS callback через location.href
+//        → HTML/JS XMLHttpRequest к code.1c.ai (SSE)
+//        → JS callback через input.click() + value
 //        → ПриНажатии → tool_result через Транспорт
 
 #Область ПеременныеМодуля
@@ -48,7 +48,7 @@
 
 КонецПроцедуры
 
-// Отправляет вопрос к 1С:Напарник через HTML/JS fetch.
+// Отправляет вопрос к 1С:Напарник через HTML/JS XMLHttpRequest.
 // Результат придёт асинхронно через callback в ПриНажатии.
 // Если диалог уже существует — продолжает его (передаёт parent_uuid).
 //
@@ -78,7 +78,7 @@
 
 	ТекущийНавык = Навык;
 
-	// Загружаем HTML с JS-кодом для fetch к API Напарника
+	// Загружаем HTML с JS-кодом для XHR к API Напарника
 	Владелец.Интеграция1СНапарник = СобратьHTML(Токен, Вопрос, ИДДиалога, ПоследнийИДСообщения, Навык, Режим, ПрямойИнструмент);
 
 КонецПроцедуры
@@ -115,11 +115,11 @@
 		Подсказка = "1С:Напарник";
 	КонецЕсли;
 
-	Владелец.Интеграция1СНапарник = "<!DOCTYPE html>
-	|<html><head><meta charset=""utf-8"">
-	|<style>body{margin:0;display:flex;align-items:center;justify-content:center;height:100%;}
-	|.dot{width:10px;height:10px;border-radius:50%;background:" + КодЦвета + ";cursor:pointer;}</style>
-	|</head><body><div class=""dot"" title=""" + Подсказка + """ onclick=""var a=document.createElement('a');a.href='v8:naparnik/settings/open';document.body.appendChild(a);a.click();""></div></body></html>";
+	Владелец.Интеграция1СНапарник = "<!DOCTYPE html>"
+	+ "<html><head><meta charset=""utf-8"">"
+	+ "<style>body{margin:0;display:flex;align-items:center;justify-content:center;height:100%;}"
+	+ ".dot{width:10px;height:10px;border-radius:50%;background:" + КодЦвета + ";cursor:pointer;}</style>"
+	+ "</head><body><div class=""dot"" title=""" + Подсказка + """ onclick=""var a=document.createElement('a');a.href='v8:naparnik/settings/open';document.body.appendChild(a);a.click();""></div></body></html>";
 
 КонецПроцедуры
 
@@ -139,40 +139,21 @@
 	КонецЕсли;
 
 	ТокенJS = СтрЗаменить(Токен, "\", "\\");
-	ТокенJS = СтрЗаменить(ТокенJS, """", "\""");
+	ТокенJS = СтрЗаменить(ТокенJS, "'", "\'");
 
-	Владелец.Интеграция1СНапарник = "<!DOCTYPE html>
-	|<html><head><meta charset=""utf-8""></head>
-	|<body><script>
-	|(async function() {
-	|  var TOKEN = """ + ТокенJS + """;
-	|  try {
-	|    var res = await fetch('https://code.1c.ai/chat_api/v1/conversations/', {
-	|      method: 'POST',
-	|      headers: {
-	|        'Content-Type': 'application/json',
-	|        'Authorization': TOKEN,
-	|        'Origin': 'https://code.1c.ai',
-	|        'Referer': 'https://code.1c.ai/chat/',
-	|        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-	|      },
-	|      body: JSON.stringify({skill_name:'custom',is_chat:true,ui_language:'russian',programming_language:'1c'}),
-	|      signal: AbortSignal.timeout(10000)
-	|    });
-	|    var a = document.createElement('a');
-	|    a.href = 'v8:naparnik/status';
-	|    a.setAttribute('data-payload', res.ok ? 'ok' : 'error');
-	|    document.body.appendChild(a);
-	|    a.click();
-	|  } catch(e) {
-	|    var a = document.createElement('a');
-	|    a.href = 'v8:naparnik/status';
-	|    a.setAttribute('data-payload', 'error');
-	|    document.body.appendChild(a);
-	|    a.click();
-	|  }
-	|})();
-	|</script></body></html>";
+	JS = "var fwd=document.createElement('input');fwd.id='NaparnikForwarder';fwd.style.display='none';document.body.appendChild(fwd);"
+	+ "var done=false;"
+	+ "function cb(d){if(done)return;done=true;fwd.value=d;fwd.click();}"
+	+ "setTimeout(function(){cb('status|error');},15000);"
+	+ "var x=new XMLHttpRequest();x.open('POST','https://code.1c.ai/chat_api/v1/conversations/',true);x.timeout=10000;"
+	+ "x.setRequestHeader('Content-Type','application/json');"
+	+ "x.setRequestHeader('Authorization','" + ТокенJS + "');"
+	+ "x.onload=function(){cb(x.status===200?'status|ok':'status|error');};"
+	+ "x.onerror=function(){cb('status|error');};"
+	+ "x.ontimeout=function(){cb('status|error');};"
+	+ "x.send(JSON.stringify({skill_name:'custom',is_chat:true,ui_language:'russian',programming_language:'1c'}));";
+
+	Владелец.Интеграция1СНапарник = "<!DOCTYPE html><html><head><meta charset=""utf-8""></head><body><script>" + JS + "</script></body></html>";
 
 КонецПроцедуры
 
@@ -197,67 +178,83 @@
 &НаКлиенте
 Процедура Интеграция1СНапарникПриНажатии(Элемент, ДанныеСобытия, СтандартнаяОбработка) Экспорт
 
-	// Перехватываем callback от JS через location.href
 	ВнешнийОбъект = ДанныеСобытия["Element"];
 	Если ВнешнийОбъект = Неопределено Тогда
 		Возврат;
 	КонецЕсли;
 
-	Попытка
-		Ссылка = ВнешнийОбъект["href"];
-	Исключение
-		Возврат;
-	КонецПопытки;
-
-	Если Ссылка = Неопределено Тогда
-		Возврат;
-	КонецЕсли;
-
 	СтандартнаяОбработка = Ложь;
 
-	Префикс = "v8:naparnik/";
-	Если НЕ СтрНачинаетсяС(Ссылка, Префикс) Тогда
-		Возврат;
+	// Определяем источник: input (XHR callback) или a (индикатор)
+	Попытка
+		ИДЭлемента = ВнешнийОбъект["id"];
+	Исключение
+		ИДЭлемента = "";
+	КонецПопытки;
+
+	Если ИДЭлемента = "NaparnikForwarder" Тогда
+		// XHR callback — данные в value: "команда|payload"
+		Попытка
+			Значение = ВнешнийОбъект["value"];
+		Исключение
+			Значение = "";
+		КонецПопытки;
+		Если НЕ ЗначениеЗаполнено(Значение) Тогда
+			Возврат;
+		КонецЕсли;
+
+		ОбработатьCallbackНапарника(Значение);
+
+	Иначе
+		// Клик по ссылке (индикатор — открытие настроек)
+		Попытка
+			Ссылка = ВнешнийОбъект["href"];
+		Исключение
+			Возврат;
+		КонецПопытки;
+		Если Ссылка = Неопределено Тогда
+			Возврат;
+		КонецЕсли;
+
+		Если СтрНачинаетсяС(Ссылка, "v8:naparnik/settings") Тогда
+			ОткрытьФорму("ВнешняяОбработка.ЛираЧат.Форма.Настройки", , Владелец);
+		КонецЕсли;
 	КонецЕсли;
 
-	Команда = Сред(Ссылка, СтрДлина(Префикс) + 1);
-	// Payload передаётся через data-payload атрибут (без ограничения длины URL)
-	Попытка
-		Содержимое = ВнешнийОбъект["dataset"]["payload"];
-	Исключение
-		Содержимое = "";
-	КонецПопытки;
-	Если Содержимое = Неопределено Тогда Содержимое = "" КонецЕсли;
+КонецПроцедуры
 
-	Если СтрНачинаетсяС(Команда, "settings") Тогда
-		ОткрытьФорму("ВнешняяОбработка.ЛираЧат.Форма.Настройки", , Владелец);
-		Возврат;
+#КонецОбласти
 
-	ИначеЕсли Команда = "status" Тогда
-		Если Содержимое = "ok" Тогда
+#Область СлужебныеПроцедуры
+
+// Обрабатывает callback от JS (input.value).
+// Формат: "команда|данные", где команда = result | error | status.
+&НаКлиенте
+Процедура ОбработатьCallbackНапарника(Знач Значение)
+
+	Части = СтрРазделить(Значение, "|");
+	Команда = Части[0];
+
+	Если Команда = "status" Тогда
+		Если Части.Количество() >= 2 И Части[1] = "ok" Тогда
 			УстановитьИндикатор("зелёный");
 		Иначе
 			УстановитьИндикатор("красный");
 		КонецЕсли;
-		Возврат;
 
 	ИначеЕсли Команда = "result" Тогда
-		// Формат: conv_id|msg_uuid|текст_ответа (без URL-кодирования)
-		// Разбираем: conv_id|msg_uuid|ответ
-		Части = СтрРазделить(Содержимое, "|");
-		Если Части.Количество() >= 3 Тогда
-			НовыйИДДиалога = Части[0];
-			НовыйИДСообщения = Части[1];
+		// Формат: result|conv_id|msg_uuid|текст_ответа
+		Если Части.Количество() >= 4 Тогда
+			НовыйИДДиалога = Части[1];
+			НовыйИДСообщения = Части[2];
 			ТекстОтвета = "";
-			// Ответ может содержать "|" — склеиваем остальные части
-			Для Индекс = 2 По Части.ВГраница() Цикл
-				Если Индекс > 2 Тогда
+			Для Индекс = 3 По Части.ВГраница() Цикл
+				Если Индекс > 3 Тогда
 					ТекстОтвета = ТекстОтвета + "|";
 				КонецЕсли;
 				ТекстОтвета = ТекстОтвета + Части[Индекс];
 			КонецЦикла;
 
-			// Сохраняем для продолжения диалога
 			Если ЗначениеЗаполнено(НовыйИДДиалога) Тогда
 				ИДДиалога = НовыйИДДиалога;
 			КонецЕсли;
@@ -265,15 +262,14 @@
 				ПоследнийИДСообщения = НовыйИДСообщения;
 			КонецЕсли;
 		Иначе
-			ТекстОтвета = Содержимое;
+			ТекстОтвета = СклеитьЧасти(Части, 1);
 		КонецЕсли;
 
 		ОтправитьРезультат(ЭтотОбъект.ИДЗапроса, ТекстОтвета);
 		УстановитьИндикатор(ПоследнийСтатус);
 
 	ИначеЕсли Команда = "error" Тогда
-		ТекстОшибки = Содержимое;
-		// При ошибке сбрасываем диалог — следующий начнёт заново
+		ТекстОшибки = СклеитьЧасти(Части, 1);
 		СброситьДиалог();
 		ОтправитьОшибку(ЭтотОбъект.ИДЗапроса, ТекстОшибки);
 		УстановитьИндикатор(ПоследнийСтатус);
@@ -282,9 +278,18 @@
 
 КонецПроцедуры
 
-#КонецОбласти
-
-#Область СлужебныеПроцедуры
+// Склеивает элементы массива начиная с указанного индекса через "|".
+&НаКлиенте
+Функция СклеитьЧасти(Части, НачальныйИндекс)
+	Результат = "";
+	Для Индекс = НачальныйИндекс По Части.ВГраница() Цикл
+		Если Индекс > НачальныйИндекс Тогда
+			Результат = Результат + "|";
+		КонецЕсли;
+		Результат = Результат + Части[Индекс];
+	КонецЦикла;
+	Возврат Результат;
+КонецФункции
 
 // Отправляет tool_result (успех) через Транспорт.
 &НаКлиенте
@@ -322,187 +327,110 @@
 
 КонецПроцедуры
 
-// Собирает HTML-страницу с JS-кодом для запроса к API Напарника.
-// Если conv_id пустой — создаёт новую conversation.
-// Если заполнен — продолжает существующую (передаёт parent_uuid).
-// JS возвращает conv_id|msg_uuid|текст через callback.
+// Собирает HTML с JS-кодом для запроса к API Напарника через XMLHttpRequest.
+// JS генерируется через конкатенацию строк (НЕ через BSL |).
+// Callback через input.click() + value (НЕ через a.href/innerText).
+// Формат value: "result|conv_id|msg_uuid|текст" или "error|сообщение".
 &НаКлиенте
 Функция СобратьHTML(Знач Токен, Знач Вопрос, Знач ТекущийИДДиалога, Знач ТекущийИДСообщения, Знач Навык = "custom", Знач Режим = "standard", Знач ПрямойИнструмент = "")
 
-	// Экранируем для вставки в JS-строку
+	// Экранируем для вставки в JS-строку (двойные кавычки)
 	ВопросJS = СтрЗаменить(Вопрос, "\", "\\");
 	ВопросJS = СтрЗаменить(ВопросJS, """", "\""");
 	ВопросJS = СтрЗаменить(ВопросJS, Символы.ПС, "\n");
 	ВопросJS = СтрЗаменить(ВопросJS, Символы.ВК, "");
 
+	// Экранируем токен для вставки в JS-строку (одинарные кавычки)
 	ТокенJS = СтрЗаменить(Токен, "\", "\\");
-	ТокенJS = СтрЗаменить(ТокенJS, """", "\""");
+	ТокенJS = СтрЗаменить(ТокенJS, "'", "\'");
 
-	// conv_id для продолжения диалога (пустая строка = создать новый)
 	ИДДиалогаJS = ?(ЗначениеЗаполнено(ТекущийИДДиалога), ТекущийИДДиалога, "");
 	ИДСообщенияJS = ?(ЗначениеЗаполнено(ТекущийИДСообщения), ТекущийИДСообщения, "");
 	НавыкJS = ?(ЗначениеЗаполнено(Навык), Навык, "custom");
 	РежимJS = ?(ЗначениеЗаполнено(Режим), Режим, "standard");
 	ПрямойИнструментJS = ?(ЗначениеЗаполнено(ПрямойИнструмент), ПрямойИнструмент, "");
 
-	HTML = "<!DOCTYPE html>
-	|<html><head><meta charset=""utf-8""></head>
-	|<body><script>
-	|(async function() {
-	|  console.log('[NAPARNIK] JS started v18.3');
-	|  var BASE = 'https://code.1c.ai';
-	|  var TOKEN = """ + ТокенJS + """;
-	|  var QUESTION = """ + ВопросJS + """;
-	|  var CONV_ID = '" + ИДДиалогаJS + "';
-	|  var PARENT_UUID = '" + ИДСообщенияJS + "';
-	|  var SKILL = '" + НавыкJS + "';
-	|  var MODE = '" + РежимJS + "';
-	|  var DIRECT_TOOL = '" + ПрямойИнструментJS + "';
-	|
-	|  var headers = {
-	|    'Content-Type': 'application/json',
-	|    'Authorization': TOKEN,
-	|    'Origin': 'https://code.1c.ai',
-	|    'Referer': 'https://code.1c.ai/chat/',
-	|    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-	|  };
-	|
-	|  var TIMEOUT = 90000;
-	|
-	|  function callback(type, data) {
-	|    var a = document.createElement('a');
-	|    a.href = 'v8:naparnik/' + type;
-	|    a.setAttribute('data-payload', data);
-	|    document.body.appendChild(a);
-	|    a.click();
-	|  }
-	|
-	|  try {
-	|    console.log('[NAPARNIK] Starting fetch, CONV_ID=' + CONV_ID);
-	|    // 1. Создать conversation если нет существующей
-	|    if (!CONV_ID) {
-	|      var fetchOpts = {
-	|        method: 'POST',
-	|        headers: headers,
-	|        body: JSON.stringify({ skill_name: 'custom', is_chat: true, ui_language: 'russian', programming_language: '1c' })
-	|      };
-	|      try { fetchOpts.signal = AbortSignal.timeout(TIMEOUT); } catch(e) { console.log('[NAPARNIK] AbortSignal.timeout not supported'); }
-	|      var convRes = await fetch(BASE + '/chat_api/v1/conversations/', fetchOpts);
-	|      if (!convRes.ok) {
-	|        callback('error', 'Ошибка создания сессии Напарника: HTTP ' + convRes.status);
-	|        return;
-	|      }
-	|      var conv = await convRes.json();
-	|      CONV_ID = conv.uuid;
-	|      console.log('[NAPARNIK] Conv created: ' + CONV_ID);
-	|    }
-	|
-	|    // Функция парсинга SSE-ответа
-	|    function parseSSE(text) {
-	|      var r = { chunks: [], msgUuid: '', fullText: '', toolCalls: [] };
-	|      var lines = text.split('\n');
-	|      for (var i = 0; i < lines.length; i++) {
-	|        var line = lines[i].trim();
-	|        if (line.indexOf('data:') !== 0) continue;
-	|        var dataStr = line.substring(5).trim();
-	|        if (dataStr === '[DONE]') break;
-	|        try {
-	|          var d = JSON.parse(dataStr);
-	|          if (d.uuid && d.role === 'assistant') {
-	|            r.msgUuid = d.uuid;
-	|            // tool_calls из финального чанка (finished + role=assistant)
-	|            if (d.finished && d.content && d.content.tool_calls && d.content.tool_calls.length > 0) {
-	|              r.toolCalls = d.content.tool_calls;
-	|            }
-	|          }
-	|          if (d.content && typeof d.content === 'object' && d.content.content != null && d.content.content !== '') {
-	|            r.fullText = d.content.content;
-	|          }
-	|          if (d.content_delta && d.content_delta.content != null && d.content_delta.content !== '') {
-	|            r.chunks.push(d.content_delta.content);
-	|          }
-	|        } catch(e) {}
-	|      }
-	|      r.text = r.fullText || r.chunks.join('');
-	|      return r;
-	|    }
-	|
-	|    // 2. Отправить вопрос и обработать tool_calls (цикл как в 1c-buddy)
-	|    var msgUrl = BASE + '/chat_api/v1/conversations/' + CONV_ID + '/messages';
-	|    var instruction = QUESTION;
-	|    if (MODE === 'direct' && DIRECT_TOOL) {
-	|      instruction = 'Нужно вернуть ровно один tool call для ' + DIRECT_TOOL + '. Входные данные: ' + QUESTION;
-	|    } else if (SKILL === 'review') {
-	|      instruction = 'Проведи code review следующего кода 1С. Укажи ошибки, проблемы производительности, нарушения best practices:\n\n' + QUESTION;
-	|    } else if (SKILL === 'explain') {
-	|      instruction = 'Объясни следующий код 1С. Что он делает, как работает, какие объекты и методы использует:\n\n' + QUESTION;
-	|    } else if (SKILL === 'modify') {
-	|      instruction = 'Выполни рефакторинг следующего кода 1С. Улучши читаемость, производительность, соответствие best practices. Верни улучшенный код с комментариями к изменениям:\n\n' + QUESTION;
-	|    }
-	|    var payload = {
-	|      role: 'user',
-	|      content: { content: { instruction: instruction }, tools: [] },
-	|      parent_uuid: PARENT_UUID || null
-	|    };
-	|    var result = '';
-	|    var msgUuid = '';
-	|    var MAX_ROUNDS = 15;
-	|
-	|    for (var round = 0; round < MAX_ROUNDS; round++) {
-	|      var msgOpts = { method: 'POST', headers: headers, body: JSON.stringify(payload) };
-	|      try { msgOpts.signal = AbortSignal.timeout(TIMEOUT); } catch(e) {}
-	|      var msgRes = await fetch(msgUrl, msgOpts);
-	|      if (!msgRes.ok) {
-	|        callback('error', 'Ошибка отправки вопроса Напарнику: HTTP ' + msgRes.status);
-	|        return;
-	|      }
-	|
-	|      var text = await msgRes.text();
-	|      var sse = parseSSE(text);
-	|      msgUuid = sse.msgUuid || msgUuid;
-	|      if (sse.text) {
-	|        result = sse.text;
-	|      }
-	|
-	|      if (sse.toolCalls.length === 0) {
-	|        break;
-	|      }
-	|
-	|      // Есть tool_calls — отправляем role=tool с результатами (проброс как в 1c-buddy)
-	|      console.log('[NAPARNIK] tool_calls: ' + sse.toolCalls.map(function(tc) { return (tc.function||{}).name; }).join(', '));
-	|      var toolContent = sse.toolCalls.map(function(tc) {
-	|        return {
-	|          status: 'accepted',
-	|          tool_call_id: tc.id,
-	|          content: null
-	|        };
-	|      });
-	|      payload = {
-	|        role: 'tool',
-	|        content: toolContent,
-	|        parent_uuid: msgUuid
-	|      };
-	|    }
-	|
-	|    // Убрать thinking-теги
-	|    result = result.replace(/<\/?thinking>/g, '').replace(/<\/?think>/g, '').trim();
-	|
-	|    if (!result) {
-	|      callback('error', 'Напарник вернул пустой ответ');
-	|      return;
-	|    }
-	|
-	|    // Возвращаем conv_id|msg_uuid|текст — BSL сохранит для продолжения диалога
-	|    callback('result', CONV_ID + '|' + (msgUuid || '') + '|' + result);
-	|
-	|  } catch(e) {
-	|    console.log('[NAPARNIK] ERROR: ' + e.message);
-	|    callback('error', 'Ошибка запроса к Напарнику: ' + e.message);
-	|  }
-	|})();
-	|</script></body></html>";
+	// --- Каркас: скрытый input для callback, флаг done, функция cb, глобальный таймаут ---
+	JS = "var fwd=document.createElement('input');fwd.id='NaparnikForwarder';fwd.style.display='none';document.body.appendChild(fwd);"
+	+ "var done=false;"
+	+ "function cb(d){if(done)return;done=true;fwd.value=d;fwd.click();}"
+	+ "setTimeout(function(){cb('error|Напарник не ответил (таймаут 270 сек)');},270000);";
 
-	Возврат HTML;
+	// --- Хелпер POST через XMLHttpRequest ---
+	JS = JS
+	+ "function post(url,hdrs,body,fn){"
+	+ "var x=new XMLHttpRequest();x.open('POST',url,true);x.timeout=90000;"
+	+ "for(var k in hdrs){x.setRequestHeader(k,hdrs[k]);}"
+	+ "x.onload=function(){fn(null,x.status,x.responseText);};"
+	+ "x.onerror=function(){fn('network');};"
+	+ "x.ontimeout=function(){fn('timeout');};"
+	+ "x.send(body);}";
+
+	// --- Переменные ---
+	JS = JS
+	+ "var T='" + ТокенJS + "';"
+	+ "var B='https://code.1c.ai/chat_api/v1';"
+	+ "var H={'Content-Type':'application/json','Authorization':T};"
+	+ "var CID='" + ИДДиалогаJS + "';"
+	+ "var PU='" + ИДСообщенияJS + "';"
+	+ "var Q=""" + ВопросJS + """;"
+	+ "var SKILL='" + НавыкJS + "';"
+	+ "var MODE='" + РежимJS + "';"
+	+ "var DTOOL='" + ПрямойИнструментJS + "';";
+
+	// --- Функция парсинга SSE ---
+	JS = JS
+	+ "function parseSSE(t){"
+	+ "var r='',tc=[],uid='',lines=t.split(String.fromCharCode(10));"
+	+ "for(var i=0;i<lines.length;i++){var ln=lines[i];if(ln.indexOf('data:')!==0)continue;var ds=ln.substring(5);"
+	+ "if(ds==='[DONE]')break;"
+	+ "try{var d=JSON.parse(ds);"
+	+ "if(d.uuid&&d.role==='assistant'){uid=d.uuid;if(d.finished&&d.content&&d.content.tool_calls&&d.content.tool_calls.length>0)tc=d.content.tool_calls;}"
+	+ "if(d.content&&typeof d.content==='object'&&d.content.content)r=d.content.content;"
+	+ "}catch(ex){}}"
+	+ "return{text:r,tc:tc,uid:uid};}";
+
+	// --- Сборка instruction по skill/mode ---
+	JS = JS
+	+ "var instruction=Q;"
+	+ "if(MODE==='direct'&&DTOOL){instruction='Нужно вернуть ровно один tool call для '+DTOOL+'. Входные данные: '+Q;}"
+	+ "else if(SKILL==='review'){instruction='Проведи code review следующего кода 1С. Укажи ошибки, проблемы производительности, нарушения best practices:\\n\\n'+Q;}"
+	+ "else if(SKILL==='explain'){instruction='Объясни следующий код 1С. Что он делает, как работает, какие объекты и методы использует:\\n\\n'+Q;}"
+	+ "else if(SKILL==='modify'){instruction='Выполни рефакторинг следующего кода 1С. Улучши читаемость, производительность, соответствие best practices. Верни улучшенный код с комментариями к изменениям:\\n\\n'+Q;}";
+
+	// --- Основной flow: создание conversation (если нет) → рекурсивный ask с tool_calls ---
+	JS = JS
+	+ "function startChat(convId){"
+	+ "var mu=B+'/conversations/'+convId+'/messages';var rounds=0;"
+	// ask() — рекурсивная функция для цикла tool_calls
+	+ "function ask(body){rounds++;if(rounds>15){cb('error|Превышен лимит раундов tool_calls (15)');return;}"
+	+ "post(mu,H,JSON.stringify(body),function(e,s,t){"
+	+ "if(e||s!==200){cb('error|Ошибка отправки вопроса Напарнику: '+(e||'HTTP '+s));return;}"
+	+ "var sse=parseSSE(t);"
+	// Есть tool_calls — отправляем role=tool с accepted
+	+ "if(sse.tc.length>0){"
+	+ "var tr=[];for(var j=0;j<sse.tc.length;j++)tr.push({status:'accepted',tool_call_id:sse.tc[j].id,content:null});"
+	+ "ask({role:'tool',content:tr,parent_uuid:sse.uid});return;}"
+	// Нет tool_calls — финальный ответ
+	+ "var r=sse.text.split('<thinking>').join('').split('</thinking>').join('').split('<think>').join('').split('</think>').join('').trim();"
+	+ "if(!r){cb('error|Напарник вернул пустой ответ');return;}"
+	+ "cb('result|'+convId+'|'+(sse.uid||'')+'|'+r);"
+	+ "});}"
+	// Первый запрос — role=user
+	+ "ask({parent_uuid:PU||null,role:'user',content:{content:{instruction:instruction},tools:[]}});"
+	+ "}";
+
+	// --- Точка входа: создаём conversation или используем существующую ---
+	JS = JS
+	+ "try{"
+	+ "if(CID){startChat(CID);}else{"
+	+ "post(B+'/conversations/',H,JSON.stringify({skill_name:'custom',is_chat:true,ui_language:'russian',programming_language:'1c'}),function(e,s,t){"
+	+ "if(e||s!==200){cb('error|Ошибка создания сессии Напарника: '+(e||'HTTP '+s));return;}"
+	+ "var cid=JSON.parse(t).uuid;startChat(cid);"
+	+ "});}"
+	+ "}catch(ex){cb('error|JS: '+ex.message);}";
+
+	Возврат "<!DOCTYPE html><html><head><meta charset=""utf-8""></head><body><script>" + JS + "</script></body></html>";
 
 КонецФункции
 
