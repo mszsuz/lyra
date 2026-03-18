@@ -20,8 +20,13 @@
 ```
 Content-Type: application/json        ← БЕЗ charset=utf-8 !
 Authorization: <token>
-Session-Id:                           ← пустая строка
-Accept: text/event-stream
+```
+
+**Необязательные заголовки** (JS-бандл чата передаёт, но API работает и без них):
+```
+Session-Id:                           ← пустая строка, можно не передавать
+Accept: text/event-stream             ← можно не передавать
+Origin: https://code.1c.ai           ← можно не передавать
 ```
 
 **ВАЖНО:** `Content-Type: application/json; charset=utf-8` вызывает HTTP 400 "error parsing the body". Это сломало Напарник в марте 2026 — все вызовы таймаутились 300 сек.
@@ -83,12 +88,30 @@ Response: SSE stream
 2. Отправить role=tool с status="accepted" для каждого tool_call_id
 3. Повторять до получения finish_reason="stop"
 
-Типичный сложный вопрос: 4-6 раундов, 30-50 секунд.
+Типичный сложный вопрос: 4-8 раундов, 30-80 секунд (подтверждено тестами 2026-03-18).
+
+## Особенности HTML-поля 1С
+
+JS в HTML-поле 1С (веб-клиент и тонкий клиент) имеет ограничения:
+- **`AbortSignal.timeout()`** — может не поддерживаться в некоторых движках. Оборачивать в `try/catch`
+- **Кастомные заголовки** — минимизировать. `Session-Id` с пустым значением не нужен API и может вызывать проблемы с CORS в движке HTML-поля
+- **Callback через `a.click()`** — единственный способ вернуть данные из JS в BSL (через `ПриНажатии`). Если JS падает до callback — молчаливый таймаут без ошибки на стороне Роутера
 
 ## Инцидент: март 2026
 
 **Симптом:** все вызовы lyra_ask_naparnik таймаутятся (300 сек), tool_result никогда не приходит.
-**Причина:** сервер code.1c.ai стал возвращать 400 на `Content-Type: application/json; charset=utf-8`.
-**Диагностика:** curl с тем же токеном → 400. Без charset → 200.
-**Фикс:** `Chat/.../МодульНапарник/Module.bsl` — убрать `; charset=utf-8` из Content-Type, добавить `Session-Id: ''`.
-**Почему тихо:** JS в HTML-поле 1С получал 400, callback error через `a.click()` видимо не доходил до BSL ПриНажатии — молчаливый таймаут без ошибки.
+**Причина:** сервер code.1c.ai стал возвращать 400 на `Content-Type: application/json; charset=utf-8` (между 11:17 и 13:46 17 марта 2026).
+**Диагностика:**
+1. Логи роутера: все `tool_call START` без `tool_call END`, только `TIMEOUT`
+2. curl с тем же токеном и `charset=utf-8` → 400. Без charset → 200
+3. Реверс-инжиниринг JS-бандла `code.1c.ai/chat/index.*.js` — подтвердил формат `application/json` без charset
+4. Тест Node.js — полный цикл с tool_calls работает
+5. Тест в веб-клиенте 1С — консоль браузера подтвердила выполнение JS и получение ответа
+
+**Фикс (v26.03.18.3):**
+- `Content-Type: application/json` без `; charset=utf-8`
+- Убран `Session-Id: ''` из заголовков (не нужен API, лишний кастомный заголовок)
+- `AbortSignal.timeout()` обёрнут в `try/catch`
+- Возвращены `Origin`, `Referer`, `User-Agent` (были в рабочей версии)
+
+**Результат:** сложный вопрос — 51 сек, 6 раундов tool_calls, полный ответ с кодом BSL.
