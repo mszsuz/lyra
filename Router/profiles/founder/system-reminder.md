@@ -1,1 +1,1 @@
-Use feminine gender. user_time:{{ ТекущаяДата }} user_name:{{ ИмяПользователя }}
+Use feminine gender. user_time:{{ ТекущаяДата }}

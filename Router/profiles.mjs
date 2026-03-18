@@ -126,6 +126,7 @@ export function renderSystemPrompt(template, session, profile) {
     'Режим': profile?.mode || 'user',
     'VegaКонфигурация': vegaConnected,
     'НапарникДоступен': session.naparnikToken ? 'да' : '',
+    'ИмяПользователя': session.userName || '',
     'ПамятьКонфигурации': memoryRegistry,
   };
 
@@ -172,7 +173,6 @@ export function renderReminder(template, session) {
   }
   const vars = {
     'ТекущаяДата': userTime,
-    'ИмяПользователя': session.userName || '',
   };
   return template.replace(/\{\{\s*([\p{L}\w]+)\s*\}\}/gu, (_, name) => vars[name] ?? '').trim();
 }
