@@ -150,11 +150,9 @@
 	|    var res = await fetch('https://code.1c.ai/chat_api/v1/conversations/', {
 	|      method: 'POST',
 	|      headers: {
-	|        'Content-Type': 'application/json; charset=utf-8',
+	|        'Content-Type': 'application/json',
 	|        'Authorization': TOKEN,
-	|        'Origin': 'https://code.1c.ai',
-	|        'Referer': 'https://code.1c.ai/chat/',
-	|        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+	|        'Session-Id': ''
 	|      },
 	|      body: JSON.stringify({skill_name:'custom',is_chat:true,ui_language:'russian',programming_language:'1c'}),
 	|      signal: AbortSignal.timeout(10000)
@@ -359,11 +357,10 @@
 	|  var DIRECT_TOOL = '" + ПрямойИнструментJS + "';
 	|
 	|  var headers = {
-	|    'Content-Type': 'application/json; charset=utf-8',
+	|    'Content-Type': 'application/json',
 	|    'Authorization': TOKEN,
-	|    'Origin': 'https://code.1c.ai',
-	|    'Referer': 'https://code.1c.ai/chat/',
-	|    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+	|    'Session-Id': '',
+	|    'Accept': 'text/event-stream'
 	|  };
 	|
 	|  var TIMEOUT = 90000;
@@ -381,7 +378,7 @@
 	|    if (!CONV_ID) {
 	|      var convRes = await fetch(BASE + '/chat_api/v1/conversations/', {
 	|        method: 'POST',
-	|        headers: Object.assign({}, headers, { 'Session-Id': '' }),
+	|        headers: headers,
 	|        body: JSON.stringify({ skill_name: 'custom', is_chat: true, ui_language: 'russian', programming_language: '1c' }),
 	|        signal: AbortSignal.timeout(TIMEOUT)
 	|      });
@@ -448,7 +445,7 @@
 	|    for (var round = 0; round < MAX_ROUNDS; round++) {
 	|      var msgRes = await fetch(msgUrl, {
 	|        method: 'POST',
-	|        headers: Object.assign({}, headers, { 'Accept': 'text/event-stream' }),
+	|        headers: headers,
 	|        body: JSON.stringify(payload),
 	|        signal: AbortSignal.timeout(TIMEOUT)
 	|      });
