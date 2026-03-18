@@ -160,12 +160,14 @@
 	|      signal: AbortSignal.timeout(10000)
 	|    });
 	|    var a = document.createElement('a');
-	|    a.href = 'v8:naparnik/status/' + (res.ok ? 'ok' : 'error');
+	|    a.href = 'v8:naparnik/status';
+	|    a.setAttribute('data-payload', res.ok ? 'ok' : 'error');
 	|    document.body.appendChild(a);
 	|    a.click();
 	|  } catch(e) {
 	|    var a = document.createElement('a');
-	|    a.href = 'v8:naparnik/status/error';
+	|    a.href = 'v8:naparnik/status';
+	|    a.setAttribute('data-payload', 'error');
 	|    document.body.appendChild(a);
 	|    a.click();
 	|  }
@@ -218,17 +220,16 @@
 		Возврат;
 	КонецЕсли;
 
-	Данные = Сред(Ссылка, СтрДлина(Префикс) + 1);
-	РазделительПозиция = СтрНайти(Данные, "/");
+	Команда = Сред(Ссылка, СтрДлина(Префикс) + 1);
+	// Payload передаётся через data-payload атрибут (без ограничения длины URL)
+	Попытка
+		Содержимое = ВнешнийОбъект["dataset"]["payload"];
+	Исключение
+		Содержимое = "";
+	КонецПопытки;
+	Если Содержимое = Неопределено Тогда Содержимое = "" КонецЕсли;
 
-	Если РазделительПозиция = 0 Тогда
-		Возврат;
-	КонецЕсли;
-
-	Команда = Лев(Данные, РазделительПозиция - 1);
-	Содержимое = СтрЗаменить(Сред(Данные, РазделительПозиция + 1), "%25", "%");
-
-	Если Команда = "settings" Тогда
+	Если СтрНачинаетсяС(Команда, "settings") Тогда
 		ОткрытьФорму("ВнешняяОбработка.ЛираЧат.Форма.Настройки", , Владелец);
 		Возврат;
 
@@ -370,7 +371,8 @@
 	|
 	|  function callback(type, data) {
 	|    var a = document.createElement('a');
-	|    a.href = 'v8:naparnik/' + type + '/' + data.replace(/%/g, '%25');
+	|    a.href = 'v8:naparnik/' + type;
+	|    a.setAttribute('data-payload', data);
 	|    document.body.appendChild(a);
 	|    a.click();
 	|  }

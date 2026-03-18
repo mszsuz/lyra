@@ -289,6 +289,7 @@ async function handleHello(data, clientUUID) {
   // Read user config (naparnik token etc.)
   const userConfig = getUserConfig(session.userId, session.baseIds);
   session.naparnikToken = userConfig.naparnikToken || '';
+  session.userName = userConfig.userName || '';
   session.dbName = userConfig.dbName || '';
   session.dbId = userConfig.dbId || '';
   session.settingsFile = userConfig.settingsFile || '';
@@ -365,6 +366,7 @@ async function handleAuth(session, data) {
 
     const userConfig = getUserConfig(user_id, session.baseIds);
     session.naparnikToken = userConfig.naparnikToken || '';
+    session.userName = userConfig.userName || '';
     session.dbName = userConfig.dbName || '';
     session.dbId = userConfig.dbId || '';
     session.settingsFile = userConfig.settingsFile || '';

@@ -61,6 +61,15 @@ export function loadProfile(profilePath) {
     log.info(TAG, `vega config loaded (${Object.keys(profile.vegaConfig.configs || {}).length} configs)`);
   }
 
+  // system-reminder.md — per-message reminder (optional)
+  const reminderPath = resolve(dir, 'system-reminder.md');
+  if (existsSync(reminderPath)) {
+    profile.systemReminderTemplate = readFileSync(reminderPath, 'utf-8');
+    log.info(TAG, `system reminder loaded (${profile.systemReminderTemplate.length} chars)`);
+  } else {
+    profile.systemReminderTemplate = '';
+  }
+
   // tool-labels.json — human-readable descriptions for client UI
   const labelsPath = resolve(dir, 'tool-labels.json');
   if (existsSync(labelsPath)) {
@@ -143,6 +152,29 @@ export function renderSystemPrompt(template, session, profile) {
   }
 
   return result.trim();
+}
+
+export function renderReminder(template, session) {
+  if (!template) return '';
+  const now = new Date();
+  // Format as ISO 8601 with offset: 2026-03-18T18:40+07:00
+  let userTime = now.toISOString().slice(0, 16) + 'Z'; // fallback: UTC
+  if (session.timezone) {
+    const match = session.timezone.match(/^GMT([+-])(\d+)$/);
+    if (match) {
+      const sign = match[1];
+      const hours = parseInt(match[2], 10);
+      const offset = (sign === '+' ? 1 : -1) * hours * 3600000;
+      const local = new Date(now.getTime() + offset);
+      const pad = n => String(n).padStart(2, '0');
+      userTime = `${local.getUTCFullYear()}-${pad(local.getUTCMonth()+1)}-${pad(local.getUTCDate())}T${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}${sign}${pad(hours)}:00`;
+    }
+  }
+  const vars = {
+    'ТекущаяДата': userTime,
+    'ИмяПользователя': session.userName || '',
+  };
+  return template.replace(/\{\{\s*([\p{L}\w]+)\s*\}\}/gu, (_, name) => vars[name] ?? '').trim();
 }
 
 export function buildMcpConfig(profile, session, toolsPort, config) {

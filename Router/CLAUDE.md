@@ -73,6 +73,7 @@ Router/
 ├── profiles/default/
 │   ├── model.json          — модель, mode (роль), allowedTools
 │   ├── system-prompt.md    — шаблон промпта ({{ }} переменные)
+│   ├── system-reminder.md  — напоминание к каждому сообщению (женский род, время, имя)
 │   ├── tools.json          — описания lyra_* инструментов (input_schema)
 │   ├── tool-labels.json    — человекочитаемые описания инструментов для UI клиента
 │   └── vega.json           — маппинг конфигураций → Vega порты
@@ -165,6 +166,7 @@ Claude stream-json → model-agnostic events. Состояние парсера 
 
 - **model.json** — модель (`sonnet`), `mode` (роль пользователя), `allowedTools` (MCP tool names)
 - **system-prompt.md** — шаблон с `{{ ИмяКонфигурации }}`, `{{ ТекущаяДата }}`, `{% Если %}` блоками
+- **system-reminder.md** — напоминание, добавляемое к каждому сообщению пользователя в `<system-reminder>` теге. Содержит: женский род, время пользователя (ISO 8601 с offset), имя. Переменные: `{{ ТекущаяДата }}`, `{{ ИмяПользователя }}`. Рендерится в `renderReminder()` (profiles.mjs). Hot reload — без перезапуска роутера
 - **tools.json** — описания lyra_* инструментов для MCP server (input_schema, hints)
 - **tool-labels.json** — человекочитаемые описания инструментов для UI клиента (например `"mcp__1c__lyra_data_query": "Получаю данные из базы..."`)
 - **vega.json** — маппинг config_name → Vega MCP port

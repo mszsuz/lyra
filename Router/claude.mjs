@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { StringDecoder } from 'node:string_decoder';
 import { createParser } from './protocol.mjs';
 import { writeClaude } from './history.mjs';
+import { renderReminder } from './profiles.mjs';
 import * as log from './log.mjs';
 
 const TAG = 'claude';
@@ -177,9 +178,15 @@ export function spawnClaude(session, { claudePath, profile, mcpConfigPath, syste
 
   function sendChat(text) {
     if (proc.stdin.writable) {
+      // Wrap user text with system reminder if configured
+      let content = text;
+      const reminder = renderReminder(profile.systemReminderTemplate, session);
+      if (reminder) {
+        content = `<system-reminder>\n${reminder}\n</system-reminder>\n<user-message>\n${text}\n</user-message>`;
+      }
       const msg = JSON.stringify({
         type: 'user',
-        message: { role: 'user', content: text },
+        message: { role: 'user', content },
       });
       session._chatSentTime = Date.now();
       proc.stdin.write(msg + '\n');
