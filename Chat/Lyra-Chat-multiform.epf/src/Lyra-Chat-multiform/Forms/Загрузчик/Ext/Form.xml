@@ -60,11 +60,11 @@
 			</Type>
 			<MainAttribute>true</MainAttribute>
 		</Attribute>
-		<Attribute name="Контекст" id="2">
+		<Attribute name="ДанныеНаСервере" id="2">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
-					<v8:content>Контекст</v8:content>
+					<v8:content>Данные на сервере</v8:content>
 				</v8:item>
 			</Title>
 			<Type/>

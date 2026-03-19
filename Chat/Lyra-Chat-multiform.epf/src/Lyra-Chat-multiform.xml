@@ -19,7 +19,7 @@
 					<v8:content>Лира: Чат</v8:content>
 				</v8:item>
 			</Synonym>
-			<Comment>26.03.19.1</Comment>
+			<Comment>26.03.20.1</Comment>
 			<DefaultForm>ExternalDataProcessor.ЛираЧат.Form.Загрузчик</DefaultForm>
 			<AuxiliaryForm/>
 		</Properties>
@@ -177,7 +177,7 @@
 				</Properties>
 			</Attribute>
 			<Form>Загрузчик</Form>
-			<Form>Форма</Form>
+			<Form>ГлавнаяФорма</Form>
 			<Form>МодульНапарник</Form>
 			<Form>МодульОбработка</Form>
 			<Form>МодульОбщий</Form>
