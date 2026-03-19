@@ -57,6 +57,9 @@ sealed class IncomingMessage {
       'hello_ack' => HelloAckMessage.fromJson(json),
       'auth_ack' => AuthAckMessage.fromJson(json),
       'balance_update' => BalanceUpdateMessage.fromJson(json),
+      'sessions_list' => SessionsListMessage(
+        sessions: List<Map<String, dynamic>>.from(json['sessions'] ?? []),
+      ),
       _ => UnknownMessage(type: type, data: json),
     };
   }
@@ -162,6 +165,11 @@ class BalanceUpdateMessage implements IncomingMessage {
         balance: (json['balance'] as num).toDouble(),
         currency: json['currency'] as String? ?? 'руб',
       );
+}
+
+class SessionsListMessage implements IncomingMessage {
+  final List<Map<String, dynamic>> sessions;
+  SessionsListMessage({required this.sessions});
 }
 
 class UnknownMessage implements IncomingMessage {

@@ -22,7 +22,7 @@ class LyraApp extends ConsumerWidget {
 
     return MaterialApp.router(
       title: 'Лира',
-      theme: lyraTheme,
+      theme: LyraTheme.lightTheme,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
     );

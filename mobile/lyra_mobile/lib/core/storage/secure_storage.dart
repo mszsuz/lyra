@@ -11,6 +11,8 @@ class SecureStorage {
   static const _keyDeviceId = 'lyra_device_id';
   static const _keyPhone = 'lyra_phone';
   static const _keySessions = 'lyra_sessions';
+  static const _keyUserName = 'lyra_user_name';
+  static const _keyUserRole = 'lyra_user_role';
 
   final FlutterSecureStorage _storage;
 
@@ -74,6 +76,22 @@ class SecureStorage {
     } catch (_) {
       return [];
     }
+  }
+
+  Future<String?> getUserName() async {
+    return _storage.read(key: _keyUserName);
+  }
+
+  Future<void> saveUserName(String name) async {
+    await _storage.write(key: _keyUserName, value: name);
+  }
+
+  Future<String?> getUserRole() async {
+    return _storage.read(key: _keyUserRole);
+  }
+
+  Future<void> saveUserRole(String role) async {
+    await _storage.write(key: _keyUserRole, value: role);
   }
 
   Future<void> clearAll() async {

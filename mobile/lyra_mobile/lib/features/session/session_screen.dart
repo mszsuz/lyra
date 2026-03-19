@@ -2,138 +2,225 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/theme.dart';
 import '../../core/centrifugo/centrifugo_client.dart';
+import '../../models/session_info.dart';
 import 'session_provider.dart';
 
-class SessionScreen extends ConsumerWidget {
+class SessionScreen extends ConsumerStatefulWidget {
   final String sessionId;
-
   const SessionScreen({super.key, required this.sessionId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(sessionProvider(sessionId));
+  ConsumerState<SessionScreen> createState() => _SessionScreenState();
+}
+
+class _SessionScreenState extends ConsumerState<SessionScreen> {
+  @override
+  Widget build(BuildContext context) {
+    final session = ref.watch(sessionProvider(widget.sessionId));
     final connectionAsync = ref.watch(_connectionStateProvider);
-    final connectionState = connectionAsync.valueOrNull ??
-        CentrifugoConnectionState.disconnected;
+    final connectionState =
+        connectionAsync.valueOrNull ?? CentrifugoConnectionState.disconnected;
 
     if (session == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Сессия')),
-        body: const Center(child: CircularProgressIndicator()),
-      );
+      return _buildLoading();
     }
 
-    final isActive = session.status == 'active' ||
-        session.status == 'ok' ||
-        session.status == 'connected';
+    // Determine effective status combining session status and connection
+    final effectiveStatus = _effectiveStatus(session, connectionState);
+    final isActive = effectiveStatus == 'active';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(session.baseName ?? 'Сессия'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/home'),
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              _buildHeader(context, session),
+              const SizedBox(height: 20),
+              _buildConnectionStatus(effectiveStatus),
+              const SizedBox(height: 12),
+              _buildBalanceCard(session, effectiveStatus),
+              const SizedBox(height: 16),
+              _buildStatusBanner(effectiveStatus),
+              const Spacer(),
+              _buildInputPanel(isActive),
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Статус подключения
-            Card(
-              child: ListTile(
-                leading: Icon(
-                  connectionState == CentrifugoConnectionState.connected
-                      ? Icons.cloud_done
-                      : Icons.cloud_off,
-                  color:
-                      connectionState == CentrifugoConnectionState.connected
-                          ? Colors.green
-                          : Colors.grey,
-                ),
-                title: const Text('Подключение'),
-                subtitle: Text(_connectionText(connectionState)),
-              ),
-            ),
-            const SizedBox(height: 8),
+    );
+  }
 
-            // Баланс
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.account_balance_wallet),
-                title: const Text('Баланс'),
-                subtitle: Text(
-                  '${session.balance.toStringAsFixed(2)} ${session.currency}',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: session.balance > 0 ? Colors.green : Colors.red,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
+  String _effectiveStatus(
+      SessionInfo session, CentrifugoConnectionState connState) {
+    if (connState == CentrifugoConnectionState.disconnected) {
+      return 'disconnected';
+    }
+    if (session.status == 'insufficient_balance') {
+      return 'insufficient_balance';
+    }
+    if (session.status == 'active' ||
+        session.status == 'ok' ||
+        session.status == 'connected') {
+      return 'active';
+    }
+    return session.status;
+  }
 
-            // Статус сессии
-            Card(
-              child: ListTile(
-                leading: Icon(
-                  _sessionStatusIcon(session.status),
-                  color: _sessionStatusColor(session.status),
-                ),
-                title: const Text('Статус'),
-                subtitle: Text(_sessionStatusText(session.status)),
-              ),
-            ),
+  // ── Loading ───────────────────────────────────────────────────────────
 
-            const Spacer(),
-
-            // Панель ввода: микрофон + камера
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildLoading() {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              Row(
                 children: [
-                  // Кнопка микрофона
-                  FloatingActionButton(
-                    heroTag: 'mic',
-                    onPressed: isActive
-                        ? () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Голосовой ввод -- в разработке'),
-                              ),
-                            );
-                          }
-                        : null,
-                    backgroundColor: isActive ? null : Colors.grey.shade300,
-                    child: Icon(
-                      Icons.mic,
-                      color: isActive ? Colors.white : Colors.grey,
-                    ),
-                  ),
-                  const SizedBox(width: 24),
-                  // Кнопка камеры
-                  FloatingActionButton(
-                    heroTag: 'camera',
-                    onPressed: isActive
-                        ? () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Камера -- в разработке'),
-                              ),
-                            );
-                          }
-                        : null,
-                    backgroundColor: isActive ? null : Colors.grey.shade300,
-                    child: Icon(
-                      Icons.camera_alt,
-                      color: isActive ? Colors.white : Colors.grey,
-                    ),
-                  ),
+                  _buildBackButton(context),
+                  const SizedBox(width: 12),
+                  const Text('Сессия',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: LyraTheme.textPrimary,
+                      )),
                 ],
+              ),
+              const Expanded(
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Header ────────────────────────────────────────────────────────────
+
+  Widget _buildHeader(BuildContext context, SessionInfo session) {
+    return Container(
+      padding: const EdgeInsets.only(bottom: 16),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: LyraTheme.divider, width: 2)),
+      ),
+      child: Row(
+        children: [
+          _buildBackButton(context),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              session.configName.isNotEmpty ? session.configName : 'Сессия',
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: LyraTheme.textPrimary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackButton(BuildContext context) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: IconButton(
+        onPressed: () => context.go('/home'),
+        icon: const Icon(Icons.arrow_back, size: 18),
+        style: IconButton.styleFrom(
+          backgroundColor: LyraTheme.bgAlt,
+          foregroundColor: LyraTheme.textSecondary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(LyraTheme.radiusSm),
+            side: const BorderSide(color: LyraTheme.divider, width: 2),
+          ),
+        ),
+        padding: EdgeInsets.zero,
+      ),
+    );
+  }
+
+  // ── Connection status card ────────────────────────────────────────────
+
+  Widget _buildConnectionStatus(String status) {
+    final Color borderColor;
+    final Color dotColor;
+    final String valueText;
+    final Color valueColor;
+
+    switch (status) {
+      case 'active':
+        borderColor = LyraTheme.green;
+        dotColor = LyraTheme.green;
+        valueText = 'ПОДКЛЮЧЕНО';
+        valueColor = LyraTheme.green;
+      case 'insufficient_balance':
+        borderColor = LyraTheme.yellow;
+        dotColor = LyraTheme.yellow;
+        valueText = 'ПОДКЛЮЧЕНО';
+        valueColor = LyraTheme.green;
+      case 'disconnected':
+        borderColor = LyraTheme.textMuted;
+        dotColor = LyraTheme.textMuted;
+        valueText = 'ОТКЛЮЧЕНО';
+        valueColor = LyraTheme.red;
+      default:
+        borderColor = LyraTheme.textMuted;
+        dotColor = LyraTheme.textMuted;
+        valueText = status.toUpperCase();
+        valueColor = LyraTheme.textSecondary;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(LyraTheme.radius),
+        border: Border.all(color: LyraTheme.divider, width: 2),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(left: BorderSide(color: borderColor, width: 4)),
+        ),
+        padding: const EdgeInsets.only(left: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: dotColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'Статус:',
+              style: TextStyle(
+                fontSize: 13,
+                color: LyraTheme.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              valueText,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: valueColor,
               ),
             ),
           ],
@@ -142,41 +229,176 @@ class SessionScreen extends ConsumerWidget {
     );
   }
 
-  String _connectionText(CentrifugoConnectionState state) {
-    return switch (state) {
-      CentrifugoConnectionState.connected => 'Подключено',
-      CentrifugoConnectionState.connecting => 'Подключение...',
-      CentrifugoConnectionState.disconnected => 'Отключено',
-    };
+  // ── Balance card ──────────────────────────────────────────────────────
+
+  Widget _buildBalanceCard(SessionInfo session, String status) {
+    final bool isNegative =
+        status == 'insufficient_balance' || status == 'disconnected';
+    final bgColor = isNegative ? LyraTheme.red : LyraTheme.accent;
+
+    final String balanceText;
+    if (status == 'disconnected') {
+      balanceText = '\u2014'; // em dash
+    } else {
+      balanceText =
+          session.balance.toStringAsFixed(2).replaceAll('.', ',');
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 28),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(LyraTheme.radius),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'БАЛАНС',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white.withValues(alpha: 0.7),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                balanceText,
+                style: const TextStyle(
+                  fontSize: 44,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'руб',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
-  IconData _sessionStatusIcon(String status) {
-    return switch (status) {
-      'active' || 'ok' || 'connected' => Icons.check_circle,
-      'insufficient_balance' => Icons.warning_amber_rounded,
-      'disconnected' => Icons.cancel,
-      _ => Icons.info_outline,
-    };
+  // ── Status banner ─────────────────────────────────────────────────────
+
+  Widget _buildStatusBanner(String status) {
+    final Color bgColor;
+    final Color borderColor;
+    final Color textColor;
+    final String text;
+
+    switch (status) {
+      case 'active':
+        bgColor = LyraTheme.greenBg;
+        borderColor = LyraTheme.green;
+        textColor = LyraTheme.green;
+        text = 'СЕССИЯ АКТИВНА';
+      case 'insufficient_balance':
+        bgColor = LyraTheme.yellowBg;
+        borderColor = LyraTheme.yellow;
+        textColor = LyraTheme.yellow;
+        text = 'ПОПОЛНИТЕ БАЛАНС';
+      case 'disconnected':
+        bgColor = LyraTheme.bgAlt;
+        borderColor = LyraTheme.divider;
+        textColor = LyraTheme.textMuted;
+        text = 'ЧАТ ОТКЛЮЧЁН';
+      default:
+        bgColor = LyraTheme.bgAlt;
+        borderColor = LyraTheme.divider;
+        textColor = LyraTheme.textMuted;
+        text = status.toUpperCase();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(LyraTheme.radiusSm),
+        border: Border.all(color: borderColor, width: 2),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          color: textColor,
+          letterSpacing: 1,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
   }
 
-  Color _sessionStatusColor(String status) {
-    return switch (status) {
-      'active' || 'ok' || 'connected' => Colors.green,
-      'insufficient_balance' => Colors.orange,
-      'disconnected' => Colors.grey,
-      _ => Colors.blue,
-    };
+  // ── Input panel ───────────────────────────────────────────────────────
+
+  Widget _buildInputPanel(bool isActive) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _buildMediaButton(
+          icon: Icons.mic,
+          enabled: isActive,
+          onTap: () => _showInDevelopment(context),
+        ),
+        const SizedBox(width: 12),
+        _buildMediaButton(
+          icon: Icons.camera_alt,
+          enabled: isActive,
+          onTap: () => _showInDevelopment(context),
+        ),
+      ],
+    );
   }
 
-  String _sessionStatusText(String status) {
-    return switch (status) {
-      'active' || 'ok' || 'connected' => 'Активна',
-      'insufficient_balance' => 'Пополните баланс',
-      'disconnected' => 'Чат отключён',
-      'auth_failed' => 'Ошибка авторизации',
-      'service_unavailable' => 'Сервис недоступен',
-      _ => status,
-    };
+  Widget _buildMediaButton({
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Opacity(
+        opacity: enabled ? 1.0 : 0.3,
+        child: Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: enabled ? LyraTheme.accentBg : LyraTheme.bgAlt,
+            borderRadius: BorderRadius.circular(LyraTheme.radius),
+            border: Border.all(
+              color: enabled ? LyraTheme.accent : LyraTheme.divider,
+              width: 2,
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 24,
+            color: enabled ? LyraTheme.accent : LyraTheme.textMuted,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showInDevelopment(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('В разработке')),
+    );
   }
 }
 

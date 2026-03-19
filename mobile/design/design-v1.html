@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Лира — Glassmorphism + Aurora</title>
+<style>
+  :root {
+    --bg-deep: #0a0a1a;
+    --glass-bg: rgba(255,255,255,0.08);
+    --glass-border: rgba(255,255,255,0.15);
+    --glass-bg-hover: rgba(255,255,255,0.12);
+    --accent-neon: #00e5ff;
+    --accent-purple: #b388ff;
+    --accent-pink: #ff80ab;
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255,255,255,0.6);
+    --success: #69f0ae;
+    --error: #ff5252;
+    --warning: #ffd740;
+    --radius: 20px;
+    --radius-sm: 12px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 20px;
+  }
+
+  .variant-label {
+    color: #fff;
+    font-size: 14px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .phone-frame {
+    width: 390px;
+    height: 844px;
+    border-radius: 44px;
+    overflow: hidden;
+    position: relative;
+    background: var(--bg-deep);
+    box-shadow: 0 0 80px rgba(0,229,255,0.15), 0 0 160px rgba(179,136,255,0.1);
+    border: 2px solid rgba(255,255,255,0.1);
+  }
+
+  .aurora-bg {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 0;
+  }
+
+  .aurora-bg::before {
+    content: '';
+    position: absolute;
+    width: 600px; height: 600px;
+    top: -200px; left: -100px;
+    background: radial-gradient(ellipse, rgba(179,136,255,0.3) 0%, transparent 70%);
+    animation: aurora1 8s ease-in-out infinite alternate;
+  }
+
+  .aurora-bg::after {
+    content: '';
+    position: absolute;
+    width: 500px; height: 500px;
+    bottom: -100px; right: -150px;
+    background: radial-gradient(ellipse, rgba(0,229,255,0.25) 0%, transparent 70%);
+    animation: aurora2 10s ease-in-out infinite alternate;
+  }
+
+  @keyframes aurora1 {
+    0% { transform: translate(0,0) rotate(0deg); }
+    100% { transform: translate(50px,30px) rotate(15deg); }
+  }
+  @keyframes aurora2 {
+    0% { transform: translate(0,0) rotate(0deg); }
+    100% { transform: translate(-40px,-20px) rotate(-10deg); }
+  }
+
+  .screen {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: none;
+    flex-direction: column;
+    padding: 60px 24px 24px;
+    overflow-y: auto;
+  }
+  .screen.active { display: flex; }
+
+  .status-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 28px;
+    z-index: 10;
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .notch {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 126px;
+    height: 34px;
+    background: #000;
+    border-radius: 0 0 20px 20px;
+  }
+
+  /* Glass card */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+  }
+
+  .glass-sm {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+  }
+
+  /* Buttons */
+  .btn-primary {
+    width: 100%;
+    padding: 16px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    background: linear-gradient(135deg, var(--accent-purple), var(--accent-neon));
+    color: #000;
+    transition: all 0.3s;
+    letter-spacing: 0.5px;
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 30px rgba(0,229,255,0.3); }
+  .btn-primary:disabled { opacity: 0.4; transform: none; box-shadow: none; cursor: default; }
+
+  .btn-ghost {
+    background: none;
+    border: 1px solid var(--glass-border);
+    color: var(--accent-neon);
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  .btn-ghost:hover { background: var(--glass-bg); }
+
+  /* Inputs */
+  .input-field {
+    width: 100%;
+    padding: 16px 20px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 18px;
+    outline: none;
+    transition: border-color 0.3s;
+    letter-spacing: 1px;
+    text-align: center;
+  }
+  .input-field:focus { border-color: var(--accent-neon); }
+  .input-field::placeholder { color: var(--text-secondary); }
+  .input-field:disabled { opacity: 0.5; }
+
+  /* App bar */
+  .app-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .app-bar h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-primary);
+    background: linear-gradient(135deg, var(--accent-neon), var(--accent-purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .icon-btn {
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.3s;
+    color: var(--text-primary);
+  }
+  .icon-btn:hover { background: var(--glass-bg-hover); }
+
+  /* ============ REGISTRATION ============ */
+  .reg-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    margin-top: 40px;
+    text-align: center;
+  }
+  .reg-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+    line-height: 1.5;
+    text-align: center;
+  }
+  .reg-logo {
+    font-size: 48px;
+    text-align: center;
+    margin-top: 40px;
+    filter: drop-shadow(0 0 20px rgba(0,229,255,0.5));
+  }
+  .sms-sent {
+    color: var(--success);
+    font-size: 14px;
+    margin: 12px 0 4px;
+  }
+  .sms-error {
+    color: var(--error);
+    font-size: 14px;
+    margin: 12px 0 4px;
+  }
+  .change-link {
+    color: var(--accent-neon);
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: underline;
+    margin-bottom: 16px;
+    display: inline-block;
+  }
+  .code-inputs {
+    display: flex;
+    gap: 12px;
+    margin: 16px 0 24px;
+    justify-content: center;
+  }
+  .code-inputs input {
+    width: 60px; height: 64px;
+    text-align: center;
+    font-size: 24px;
+    font-weight: 700;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.3s;
+  }
+  .code-inputs input:focus { border-color: var(--accent-neon); box-shadow: 0 0 15px rgba(0,229,255,0.2); }
+  .attempts { color: var(--text-secondary); font-size: 13px; text-align: center; margin-top: 8px; }
+
+  /* ============ HOME ============ */
+  .scan-btn {
+    width: 100%;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    cursor: pointer;
+    margin-bottom: 24px;
+    transition: all 0.3s;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-primary);
+    background: linear-gradient(135deg, rgba(179,136,255,0.15), rgba(0,229,255,0.15));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(20px);
+  }
+  .scan-btn:hover { background: linear-gradient(135deg, rgba(179,136,255,0.25), rgba(0,229,255,0.25)); transform: translateY(-2px); }
+  .scan-btn .scan-icon {
+    font-size: 28px;
+    filter: drop-shadow(0 0 10px rgba(0,229,255,0.5));
+  }
+
+  .section-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 12px;
+  }
+
+  .session-card {
+    padding: 16px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  .session-card:hover { background: var(--glass-bg-hover); }
+
+  .status-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-dot.green { background: var(--success); box-shadow: 0 0 10px var(--success); }
+  .status-dot.yellow { background: var(--warning); box-shadow: 0 0 10px var(--warning); }
+  .status-dot.gray { background: rgba(255,255,255,0.3); }
+
+  .session-info { flex: 1; }
+  .session-name { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+  .session-balance { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+  .session-arrow { color: var(--text-secondary); font-size: 18px; }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .empty-state .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+
+  /* ============ QR SCANNER ============ */
+  .qr-screen {
+    padding: 0 !important;
+    background: #000;
+  }
+  .qr-viewfinder {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .qr-frame {
+    width: 240px; height: 240px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 24px;
+    position: relative;
+  }
+  .qr-frame::before, .qr-frame::after {
+    content: '';
+    position: absolute;
+    width: 40px; height: 40px;
+    border-color: var(--accent-neon);
+    border-style: solid;
+  }
+  .qr-frame::before {
+    top: -2px; left: -2px;
+    border-width: 3px 0 0 3px;
+    border-radius: 24px 0 0 0;
+  }
+  .qr-frame::after {
+    top: -2px; right: -2px;
+    border-width: 3px 3px 0 0;
+    border-radius: 0 24px 0 0;
+  }
+  .qr-frame-bottom { position: relative; width: 240px; height: 0; }
+  .qr-frame-bottom::before, .qr-frame-bottom::after {
+    content: '';
+    position: absolute;
+    width: 40px; height: 40px;
+    border-color: var(--accent-neon);
+    border-style: solid;
+  }
+  .qr-frame-bottom::before {
+    bottom: 0; left: -2px;
+    border-width: 0 0 3px 3px;
+    border-radius: 0 0 0 24px;
+  }
+  .qr-frame-bottom::after {
+    bottom: 0; right: -2px;
+    border-width: 0 3px 3px 0;
+    border-radius: 0 0 24px 0;
+  }
+  .qr-scan-line {
+    position: absolute;
+    top: 10%;
+    left: 10%; right: 10%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent-neon), transparent);
+    animation: scanLine 2s ease-in-out infinite;
+    box-shadow: 0 0 15px var(--accent-neon);
+  }
+  @keyframes scanLine {
+    0%, 100% { top: 10%; }
+    50% { top: 85%; }
+  }
+  .qr-hint {
+    color: rgba(255,255,255,0.7);
+    font-size: 15px;
+    margin-top: 32px;
+    text-align: center;
+  }
+  .qr-back {
+    position: absolute;
+    top: 60px; left: 24px;
+    z-index: 5;
+  }
+  .qr-status-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(10px);
+    z-index: 4;
+    display: none;
+  }
+  .qr-status-overlay.active { display: flex; }
+  .qr-status-icon { font-size: 64px; margin-bottom: 16px; }
+  .qr-status-text { color: var(--text-primary); font-size: 18px; font-weight: 600; }
+  .qr-status-sub { color: var(--text-secondary); font-size: 14px; margin-top: 8px; }
+
+  /* ============ SESSION ============ */
+  .session-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .session-header h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    flex: 1;
+  }
+
+  .connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+  }
+  .connection-status .label { font-size: 13px; color: var(--text-secondary); }
+  .connection-status .value { font-size: 13px; font-weight: 600; }
+  .connection-status .value.connected { color: var(--success); }
+  .connection-status .value.disconnected { color: var(--error); }
+
+  .balance-card {
+    padding: 24px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .balance-label { font-size: 13px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .balance-value { font-size: 42px; font-weight: 800; }
+  .balance-value.positive { color: var(--success); text-shadow: 0 0 30px rgba(105,240,174,0.3); }
+  .balance-value.negative { color: var(--error); text-shadow: 0 0 30px rgba(255,82,82,0.3); }
+  .balance-currency { font-size: 20px; font-weight: 400; opacity: 0.7; }
+
+  .session-status-banner {
+    padding: 14px 20px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 16px;
+  }
+  .session-status-banner.active { color: var(--success); border-color: rgba(105,240,174,0.3); background: rgba(105,240,174,0.05); }
+  .session-status-banner.insufficient { color: var(--warning); border-color: rgba(255,215,64,0.3); background: rgba(255,215,64,0.05); }
+  .session-status-banner.disconnected { color: rgba(255,255,255,0.4); border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.02); }
+
+  .input-panel {
+    margin-top: auto;
+    display: flex;
+    gap: 10px;
+    padding-top: 16px;
+  }
+  .input-panel .media-btn {
+    width: 52px; height: 52px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    font-size: 22px;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(20px);
+  }
+  .input-panel .media-btn:hover { background: var(--glass-bg-hover); }
+  .input-panel .media-btn.disabled { opacity: 0.3; cursor: default; pointer-events: none; }
+
+  /* ============ STATE CONTROLS ============ */
+  .controls-panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(10,10,26,0.95);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding: 12px 20px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .controls-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .ctrl-btn {
+    padding: 6px 14px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .ctrl-btn:hover { background: rgba(255,255,255,0.1); }
+  .ctrl-btn.active { background: var(--accent-neon); color: #000; border-color: var(--accent-neon); font-weight: 600; }
+  .controls-label { font-size: 11px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="variant-label">Вариант 1 / Glassmorphism + Aurora</div>
+
+<div class="phone-frame">
+  <div class="aurora-bg"></div>
+  <div class="status-bar">
+    <span>9:41</span>
+    <div class="notch"></div>
+    <span>📶 🔋</span>
+  </div>
+
+  <!-- REGISTRATION -->
+  <div class="screen active" id="screen-reg">
+    <div class="reg-logo">🎵</div>
+    <div class="reg-title" id="reg-title">Введите номер телефона</div>
+    <div class="reg-subtitle" id="reg-subtitle">Мы отправим SMS с кодом подтверждения</div>
+
+    <div id="reg-phone-section">
+      <input type="text" class="input-field" id="reg-phone" placeholder="+7 (900) 123-45-67" value="+7 (900) 123-45-67">
+      <div id="reg-sms-status"></div>
+      <div style="margin-top:16px;">
+        <button class="btn-primary" id="reg-send-btn" onclick="regSendCode()">Получить код</button>
+      </div>
+    </div>
+
+    <div id="reg-code-section" style="display:none;">
+      <div class="code-inputs">
+        <input type="text" maxlength="1" value="4">
+        <input type="text" maxlength="1" value="8">
+        <input type="text" maxlength="1" value="2">
+        <input type="text" maxlength="1" value="">
+      </div>
+      <button class="btn-primary" onclick="showScreen('home')">Подтвердить</button>
+      <div class="attempts" id="reg-attempts"></div>
+    </div>
+  </div>
+
+  <!-- HOME -->
+  <div class="screen" id="screen-home">
+    <div class="app-bar">
+      <h1>Лира</h1>
+      <div class="icon-btn" onclick="showScreen('reg')" title="Выйти">🚪</div>
+    </div>
+
+
+    <div class="balance-home glass" style="padding:20px;text-align:center;margin-bottom:20px;">
+      <div style="font-size:13px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Баланс</div>
+      <div style="font-size:36px;font-weight:800;color:var(--success);text-shadow:0 0 20px rgba(105,240,174,0.3);">1 250,00 <span style="font-size:18px;opacity:0.7;">₽</span></div>
+      <button class="btn-ghost" style="margin-top:12px;padding:8px 20px;font-size:13px;" onclick="alert('Пополнение баланса')">Пополнить</button>
+    </div>
+
+    <div class="scan-btn glass" onclick="showScreen('qr')">
+      <span class="scan-icon">📷</span>
+      Сканировать QR
+    </div>
+
+    <div class="section-title">Активные сессии</div>
+
+    <div id="home-sessions">
+      <div class="session-card glass-sm" onclick="showScreen('session')">
+        <div class="status-dot green"></div>
+        <div class="session-info">
+          <div class="session-name">БухгалтерияПредприятия</div>
+        </div>
+        <div class="session-arrow">›</div>
+      </div>
+      <div class="session-card glass-sm" onclick="showScreen('session')">
+        <div class="status-dot yellow"></div>
+        <div class="session-info">
+          <div class="session-name">ЗарплатаИУправление</div>
+        </div>
+        <div class="session-arrow">›</div>
+      </div>
+      <div class="session-card glass-sm">
+        <div class="status-dot gray"></div>
+        <div class="session-info">
+          <div class="session-name">УправлениеТорговлей</div>
+        </div>
+        <div class="session-arrow">›</div>
+      </div>
+    </div>
+
+    <div id="home-empty" style="display:none;">
+      <div class="empty-state glass">
+        <div class="empty-icon">📡</div>
+        <div>Нет активных сессий<br>Отсканируйте QR-код в 1С для подключения</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR SCANNER -->
+  <div class="screen qr-screen" id="screen-qr">
+    <div class="qr-back">
+      <div class="icon-btn" onclick="showScreen('home')">←</div>
+    </div>
+    <div class="qr-viewfinder" id="qr-viewfinder">
+      <div class="qr-frame">
+        <div class="qr-scan-line" id="qr-scan-line"></div>
+      </div>
+      <div class="qr-frame-bottom"></div>
+      <div class="qr-hint" id="qr-hint">Наведите камеру на QR-код в 1С</div>
+    </div>
+
+    <div class="qr-status-overlay" id="qr-connecting">
+      <div class="qr-status-icon" style="animation: pulse 1.5s infinite;">⏳</div>
+      <div class="qr-status-text">Подключение...</div>
+      <div class="qr-status-sub">Устанавливаем соединение</div>
+    </div>
+
+    <div class="qr-status-overlay" id="qr-auth">
+      <div class="qr-status-icon" style="animation: pulse 1.5s infinite;">🔐</div>
+      <div class="qr-status-text">Авторизация...</div>
+      <div class="qr-status-sub">Проверяем данные</div>
+    </div>
+
+    <div class="qr-status-overlay" id="qr-success">
+      <div class="qr-status-icon">✅</div>
+      <div class="qr-status-text" style="color: var(--success)">Подключено!</div>
+      <div class="qr-status-sub">Переход к сессии...</div>
+    </div>
+
+    <div class="qr-status-overlay" id="qr-error">
+      <div class="qr-status-icon">❌</div>
+      <div class="qr-status-text" style="color: var(--error)">Ошибка подключения</div>
+      <div class="qr-status-sub">Попробуйте отсканировать QR-код ещё раз</div>
+      <div style="margin-top:24px;">
+        <button class="btn-ghost" onclick="setQrState('scanning')">Повторить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SESSION -->
+  <div class="screen" id="screen-session">
+    <div class="session-header">
+      <div class="icon-btn" onclick="showScreen('home')">←</div>
+      <h2>БухгалтерияПредприятия</h2>
+    </div>
+
+    <div class="connection-status glass-sm" id="session-connection">
+      <div class="status-dot green" id="session-conn-dot"></div>
+      <span class="label">Статус:</span>
+      <span class="value connected" id="session-conn-text">Подключено</span>
+    </div>
+
+    <div class="balance-card glass" id="session-balance-card">
+      <div class="balance-label">Баланс</div>
+      <div class="balance-value positive" id="session-balance">1 250 <span class="balance-currency">₽</span></div>
+    </div>
+
+    <div class="session-status-banner glass-sm active" id="session-status-banner">
+      Сессия активна
+    </div>
+
+    <div style="flex:1;"></div>
+
+    <div class="input-panel" id="session-input-panel">
+      <div class="media-btn glass" id="mic-btn">🎤</div>
+      <div class="media-btn glass" id="cam-btn">📸</div>
+    </div>
+  </div>
+</div>
+
+<!-- CONTROLS -->
+<div class="controls-panel">
+  <div class="controls-label">Экраны</div>
+  <div class="controls-row">
+    <button class="ctrl-btn active" onclick="showScreen('reg')">Регистрация</button>
+    <button class="ctrl-btn" onclick="showScreen('home')">Главная</button>
+    <button class="ctrl-btn" onclick="showScreen('qr')">QR Сканер</button>
+    <button class="ctrl-btn" onclick="showScreen('session')">Сессия</button>
+  </div>
+
+  <div class="controls-label" style="margin-top:4px;">Состояния</div>
+  <div class="controls-row" id="state-controls"></div>
+</div>
+
+<style>
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+</style>
+
+<script>
+  let currentScreen = 'reg';
+  let regState = 'phone'; // phone, code, error
+
+  function showScreen(name) {
+    currentScreen = name;
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+
+    // Update active tab
+    document.querySelectorAll('.controls-row')[0].querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+    const btns = document.querySelectorAll('.controls-row')[0].querySelectorAll('.ctrl-btn');
+    const map = { reg: 0, home: 1, qr: 2, session: 3 };
+    if (btns[map[name]]) btns[map[name]].classList.add('active');
+
+    updateStateControls();
+  }
+
+  function updateStateControls() {
+    const container = document.getElementById('state-controls');
+    container.innerHTML = '';
+
+    if (currentScreen === 'reg') {
+      ['Ввод телефона', 'SMS отправлено', 'Ошибка'].forEach((label, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'ctrl-btn' + (i === 0 && regState === 'phone' || i === 1 && regState === 'code' || i === 2 && regState === 'error' ? ' active' : '');
+        btn.textContent = label;
+        btn.onclick = () => { setRegState(['phone','code','error'][i]); };
+        container.appendChild(btn);
+      });
+    } else if (currentScreen === 'home') {
+      ['С сессиями', 'Без сессий'].forEach((label, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'ctrl-btn' + (i === 0 ? ' active' : '');
+        btn.textContent = label;
+        btn.onclick = () => {
+          container.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById('home-sessions').style.display = i === 0 ? 'block' : 'none';
+          document.getElementById('home-empty').style.display = i === 1 ? 'block' : 'none';
+        };
+        container.appendChild(btn);
+      });
+    } else if (currentScreen === 'qr') {
+      ['Сканирование', 'Подключение', 'Авторизация', 'Готово', 'Ошибка'].forEach((label, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'ctrl-btn' + (i === 0 ? ' active' : '');
+        btn.textContent = label;
+        btn.onclick = () => {
+          container.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          setQrState(['scanning','connecting','auth','success','error'][i]);
+        };
+        container.appendChild(btn);
+      });
+    } else if (currentScreen === 'session') {
+      ['Активна', 'Недост. баланс', 'Отключена'].forEach((label, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'ctrl-btn' + (i === 0 ? ' active' : '');
+        btn.textContent = label;
+        btn.onclick = () => {
+          container.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          setSessionState(['active','insufficient','disconnected'][i]);
+        };
+        container.appendChild(btn);
+      });
+    }
+  }
+
+  function regSendCode() {
+    setRegState('code');
+  }
+
+  function setRegState(state) {
+    regState = state;
+    const phone = document.getElementById('reg-phone');
+    const status = document.getElementById('reg-sms-status');
+    const codeSection = document.getElementById('reg-code-section');
+    const sendBtn = document.getElementById('reg-send-btn');
+    const attempts = document.getElementById('reg-attempts');
+    const title = document.getElementById('reg-title');
+    const subtitle = document.getElementById('reg-subtitle');
+
+    if (state === 'phone') {
+      phone.disabled = false;
+      status.innerHTML = '';
+      codeSection.style.display = 'none';
+      sendBtn.style.display = 'block';
+      title.textContent = 'Введите номер телефона';
+      subtitle.textContent = 'Мы отправим SMS с кодом подтверждения';
+      attempts.textContent = '';
+    } else if (state === 'code') {
+      phone.disabled = true;
+      status.innerHTML = '<div class="sms-sent">SMS отправлено на +7 (900) 123-45-67</div><span class="change-link" onclick="setRegState(\'phone\')">Изменить номер</span>';
+      codeSection.style.display = 'block';
+      sendBtn.style.display = 'none';
+      title.textContent = 'Введите код';
+      subtitle.textContent = 'Код из SMS, 4 цифры';
+      attempts.textContent = '';
+    } else if (state === 'error') {
+      phone.disabled = true;
+      status.innerHTML = '<div class="sms-error">Неверный код подтверждения</div><span class="change-link" onclick="setRegState(\'phone\')">Изменить номер</span>';
+      codeSection.style.display = 'block';
+      sendBtn.style.display = 'none';
+      title.textContent = 'Введите код';
+      subtitle.textContent = 'Код из SMS, 4 цифры';
+      attempts.textContent = 'Осталось попыток: 2 из 3';
+    }
+    updateStateControls();
+  }
+
+  function setQrState(state) {
+    ['qr-connecting','qr-auth','qr-success','qr-error'].forEach(id => {
+      document.getElementById(id).classList.remove('active');
+    });
+    const scanLine = document.getElementById('qr-scan-line');
+    const hint = document.getElementById('qr-hint');
+
+    if (state === 'scanning') {
+      scanLine.style.display = 'block';
+      hint.textContent = 'Наведите камеру на QR-код в 1С';
+    } else if (state === 'connecting') {
+      scanLine.style.display = 'none';
+      document.getElementById('qr-connecting').classList.add('active');
+    } else if (state === 'auth') {
+      scanLine.style.display = 'none';
+      document.getElementById('qr-auth').classList.add('active');
+    } else if (state === 'success') {
+      scanLine.style.display = 'none';
+      document.getElementById('qr-success').classList.add('active');
+    } else if (state === 'error') {
+      scanLine.style.display = 'none';
+      document.getElementById('qr-error').classList.add('active');
+    }
+  }
+
+  function setSessionState(state) {
+    const dot = document.getElementById('session-conn-dot');
+    const text = document.getElementById('session-conn-text');
+    const balance = document.getElementById('session-balance');
+    const banner = document.getElementById('session-status-banner');
+    const mic = document.getElementById('mic-btn');
+    const cam = document.getElementById('cam-btn');
+
+    if (state === 'active') {
+      dot.className = 'status-dot green';
+      text.className = 'value connected';
+      text.textContent = 'Подключено';
+      balance.className = 'balance-value positive';
+      balance.innerHTML = '1 250 <span class="balance-currency">₽</span>';
+      banner.className = 'session-status-banner glass-sm active';
+      banner.textContent = 'Сессия активна';
+      mic.classList.remove('disabled');
+      cam.classList.remove('disabled');
+    } else if (state === 'insufficient') {
+      dot.className = 'status-dot yellow';
+      text.className = 'value connected';
+      text.textContent = 'Подключено';
+      balance.className = 'balance-value negative';
+      balance.innerHTML = '0 <span class="balance-currency">₽</span>';
+      banner.className = 'session-status-banner glass-sm insufficient';
+      banner.textContent = 'Пополните баланс';
+      mic.classList.add('disabled');
+      cam.classList.add('disabled');
+    } else if (state === 'disconnected') {
+      dot.className = 'status-dot gray';
+      text.className = 'value disconnected';
+      text.textContent = 'Отключено';
+      balance.className = 'balance-value negative';
+      balance.innerHTML = '— <span class="balance-currency">₽</span>';
+      banner.className = 'session-status-banner glass-sm disconnected';
+      banner.textContent = 'Чат отключён';
+      mic.classList.add('disabled');
+      cam.classList.add('disabled');
+    }
+  }
+
+  updateStateControls();
+</script>
+</body>
+</html>

@@ -25,8 +25,8 @@ class SessionNotifier extends StateNotifier<SessionInfo?> {
     if (session != null) {
       state = session;
       // Подключаемся к каналу сессии
-      if (session.mobileJwt.isNotEmpty) {
-        await _centrifugo.connectToSession(session.mobileJwt);
+      if (session.mobileJwt != null && session.mobileJwt!.isNotEmpty) {
+        await _centrifugo.connectToSession(session.mobileJwt!);
         _messagesSub = _centrifugo.messages.listen(_onMessage);
       }
     }

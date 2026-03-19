@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Лира — Neumorphism</title>
+<style>
+  :root {
+    --bg: #e0e5ec;
+    --bg-dark: #d1d9e6;
+    --accent: #6c5ce7;
+    --accent-light: #a29bfe;
+    --accent-bg: rgba(108,92,231,0.1);
+    --green: #00b894;
+    --green-bg: rgba(0,184,148,0.12);
+    --yellow: #fdcb6e;
+    --yellow-bg: rgba(253,203,110,0.15);
+    --red: #d63031;
+    --red-bg: rgba(214,48,49,0.1);
+    --text-primary: #2d3436;
+    --text-secondary: #636e72;
+    --text-muted: #b2bec3;
+    --shadow-out: 8px 8px 16px #b8bec7, -8px -8px 16px #ffffff;
+    --shadow-out-sm: 4px 4px 8px #b8bec7, -4px -4px 8px #ffffff;
+    --shadow-in: inset 4px 4px 8px #b8bec7, inset -4px -4px 8px #ffffff;
+    --shadow-in-deep: inset 6px 6px 12px #b8bec7, inset -6px -6px 12px #ffffff;
+    --radius: 20px;
+    --radius-sm: 14px;
+    --radius-pill: 50px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+    padding: 20px;
+  }
+
+  .variant-label {
+    color: var(--accent);
+    font-size: 13px;
+    margin-bottom: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  .phone-frame {
+    width: 390px;
+    height: 844px;
+    border-radius: 44px;
+    overflow: hidden;
+    position: relative;
+    background: var(--bg);
+    box-shadow: 12px 12px 24px #b8bec7, -12px -12px 24px #ffffff;
+  }
+
+  .screen {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: none;
+    flex-direction: column;
+    padding: 60px 24px 24px;
+    overflow-y: auto;
+    background: var(--bg);
+  }
+  .screen.active { display: flex; animation: fadeSlideIn 0.4s ease; }
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .status-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 28px;
+    z-index: 10;
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+  .notch {
+    position: absolute;
+    top: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 126px; height: 34px;
+    background: var(--text-primary);
+    border-radius: 0 0 20px 20px;
+  }
+
+  /* Neumorphic elements */
+  .neu-out {
+    background: var(--bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-out);
+  }
+  .neu-out-sm {
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-out-sm);
+  }
+  .neu-in {
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-in);
+  }
+
+  /* Buttons */
+  .btn-primary {
+    width: 100%;
+    padding: 18px;
+    border: none;
+    border-radius: var(--radius-pill);
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    background: var(--accent);
+    color: #fff;
+    transition: all 0.2s;
+    box-shadow: 4px 4px 8px #b8bec7, -4px -4px 8px #ffffff;
+    font-family: inherit;
+  }
+  .btn-primary:hover { box-shadow: 2px 2px 4px #b8bec7, -2px -2px 4px #ffffff; }
+  .btn-primary:active { box-shadow: var(--shadow-in); }
+  .btn-primary:disabled { opacity: 0.5; cursor: default; }
+
+  .btn-ghost {
+    background: var(--bg);
+    border: none;
+    color: var(--accent);
+    padding: 12px 24px;
+    border-radius: var(--radius-pill);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    box-shadow: var(--shadow-out-sm);
+  }
+  .btn-ghost:hover { box-shadow: 2px 2px 4px #b8bec7, -2px -2px 4px #ffffff; }
+
+  /* Inputs */
+  .input-field {
+    width: 100%;
+    padding: 18px 24px;
+    background: var(--bg);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 18px;
+    font-family: inherit;
+    outline: none;
+    transition: all 0.3s;
+    box-shadow: var(--shadow-in);
+    text-align: center;
+  }
+  .input-field:focus { box-shadow: var(--shadow-in-deep), 0 0 0 2px var(--accent-light); }
+  .input-field::placeholder { color: var(--text-muted); }
+  .input-field:disabled { opacity: 0.5; }
+
+  /* App bar */
+  .app-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .app-bar h1 {
+    font-size: 30px;
+    font-weight: 800;
+    color: var(--text-primary);
+  }
+
+  .icon-btn {
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.2s;
+    color: var(--text-secondary);
+    box-shadow: var(--shadow-out-sm);
+  }
+  .icon-btn:hover { box-shadow: 2px 2px 4px #b8bec7, -2px -2px 4px #ffffff; }
+  .icon-btn:active { box-shadow: var(--shadow-in); }
+
+  /* ============ SPLASH ============ */
+  .splash-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .splash-logo-wrap {
+    width: 120px; height: 120px;
+    border-radius: 36px;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-out);
+    margin-bottom: 24px;
+    animation: bounceIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes bounceIn {
+    0% { transform: scale(0.3); opacity: 0; }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .splash-logo-wrap span { font-size: 56px; }
+  .splash-title {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 32px;
+  }
+  .splash-spinner {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--bg);
+    box-shadow: var(--shadow-out-sm);
+    position: relative;
+  }
+  .splash-spinner::after {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border: 3px solid var(--bg-dark);
+    border-top: 3px solid var(--accent);
+    border-radius: 50%;
+    animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .splash-text {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-top: 16px;
+    font-weight: 500;
+  }
+
+  /* ============ REGISTRATION ============ */
+  .reg-logo-wrap {
+    width: 80px; height: 80px;
+    border-radius: 24px;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-out);
+    margin: 20px auto 0;
+  }
+  .reg-logo-wrap span { font-size: 36px; color: var(--accent); }
+  .reg-title {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    margin-top: 28px;
+    text-align: center;
+  }
+  .reg-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+    line-height: 1.6;
+    text-align: center;
+  }
+  .sms-sent {
+    color: var(--green);
+    font-size: 13px;
+    margin: 12px 0 4px;
+    font-weight: 600;
+    background: var(--bg);
+    padding: 12px 16px;
+    border-radius: 12px;
+    box-shadow: var(--shadow-in);
+  }
+  .sms-error {
+    color: var(--red);
+    font-size: 13px;
+    margin: 12px 0 4px;
+    font-weight: 600;
+    background: var(--bg);
+    padding: 12px 16px;
+    border-radius: 12px;
+    box-shadow: var(--shadow-in);
+  }
+  .change-link {
+    color: var(--accent);
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: none;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: inline-block;
+  }
+  .change-link:hover { text-decoration: underline; }
+  .code-inputs {
+    display: flex;
+    gap: 14px;
+    margin: 16px 0 24px;
+    justify-content: center;
+  }
+  .code-inputs input {
+    width: 62px; height: 68px;
+    text-align: center;
+    font-size: 26px;
+    font-weight: 800;
+    background: var(--bg);
+    border: none;
+    border-radius: 16px;
+    color: var(--text-primary);
+    font-family: inherit;
+    outline: none;
+    transition: all 0.3s;
+    box-shadow: var(--shadow-in);
+  }
+  .code-inputs input:focus { box-shadow: var(--shadow-in-deep), 0 0 0 2px var(--accent-light); }
+  .attempts { color: var(--text-secondary); font-size: 13px; text-align: center; margin-top: 8px; }
+
+  /* ============ HOME ============ */
+  .scan-btn {
+    width: 100%;
+    padding: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    cursor: pointer;
+    margin-bottom: 28px;
+    transition: all 0.2s;
+    font-size: 17px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: var(--radius);
+    font-family: inherit;
+    box-shadow: 6px 6px 12px #b8bec7, -6px -6px 12px #ffffff;
+  }
+  .scan-btn:hover { box-shadow: 4px 4px 8px #b8bec7, -4px -4px 8px #ffffff; }
+  .scan-btn:active { box-shadow: 2px 2px 4px #b8bec7, -2px -2px 4px #ffffff; }
+  .scan-btn .scan-icon { font-size: 26px; }
+
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 14px;
+    padding-left: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .session-card {
+    padding: 18px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .session-card:hover { box-shadow: 4px 4px 8px #b8bec7, -4px -4px 8px #ffffff; }
+  .session-card:active { box-shadow: var(--shadow-in); }
+
+  .status-indicator {
+    width: 44px; height: 44px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+    background: var(--bg);
+    box-shadow: var(--shadow-in);
+  }
+  .status-indicator.green { color: var(--green); }
+  .status-indicator.yellow { color: #e17055; }
+  .status-indicator.gray { color: var(--text-muted); }
+
+  .session-info { flex: 1; }
+  .session-name { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+  .session-balance { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+  .session-status-label { font-size: 12px; margin-top: 2px; font-weight: 600; }
+  .session-status-label.active { color: var(--green); }
+  .session-status-label.insufficient { color: #e17055; }
+  .session-status-label.disconnected { color: var(--text-muted); }
+  .session-arrow { color: var(--text-muted); font-size: 18px; }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .empty-state .empty-icon { font-size: 56px; margin-bottom: 16px; opacity: 0.4; }
+
+  /* ============ QR SCANNER ============ */
+  .qr-screen { padding: 0 !important; background: #2d3436; }
+  .qr-viewfinder {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .qr-frame {
+    width: 240px; height: 240px;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 28px;
+    position: relative;
+    box-shadow: 0 0 0 4000px rgba(45,52,54,0.6);
+  }
+  .qr-corner { position: absolute; width: 36px; height: 36px; }
+  .qr-corner::before, .qr-corner::after { content: ''; position: absolute; background: var(--accent-light); border-radius: 3px; }
+  .qr-corner.tl { top: -2px; left: -2px; }
+  .qr-corner.tl::before { top: 0; left: 0; width: 36px; height: 4px; }
+  .qr-corner.tl::after { top: 0; left: 0; width: 4px; height: 36px; }
+  .qr-corner.tr { top: -2px; right: -2px; }
+  .qr-corner.tr::before { top: 0; right: 0; width: 36px; height: 4px; }
+  .qr-corner.tr::after { top: 0; right: 0; width: 4px; height: 36px; }
+  .qr-corner.bl { bottom: -2px; left: -2px; }
+  .qr-corner.bl::before { bottom: 0; left: 0; width: 36px; height: 4px; }
+  .qr-corner.bl::after { bottom: 0; left: 0; width: 4px; height: 36px; }
+  .qr-corner.br { bottom: -2px; right: -2px; }
+  .qr-corner.br::before { bottom: 0; right: 0; width: 36px; height: 4px; }
+  .qr-corner.br::after { bottom: 0; right: 0; width: 4px; height: 36px; }
+
+  .qr-scan-line {
+    position: absolute;
+    top: 10%;
+    left: 10%; right: 10%;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--accent-light), transparent);
+    animation: scanLine 2.5s ease-in-out infinite;
+    border-radius: 2px;
+    box-shadow: 0 0 16px rgba(162,155,254,0.5);
+  }
+  @keyframes scanLine {
+    0%, 100% { top: 10%; }
+    50% { top: 85%; }
+  }
+  .qr-hint {
+    color: rgba(255,255,255,0.5);
+    font-size: 15px;
+    margin-top: 36px;
+    text-align: center;
+    font-weight: 500;
+  }
+  .qr-back {
+    position: absolute;
+    top: 60px; left: 24px;
+    z-index: 5;
+  }
+  .qr-back .icon-btn { background: rgba(255,255,255,0.08); color: #fff; box-shadow: none; }
+  .qr-back .icon-btn:hover { background: rgba(255,255,255,0.15); }
+
+  .qr-status-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(45,52,54,0.92);
+    backdrop-filter: blur(20px);
+    z-index: 4;
+    display: none;
+  }
+  .qr-status-overlay.active { display: flex; }
+  .qr-status-icon { font-size: 64px; margin-bottom: 20px; }
+  .qr-status-text { color: #fff; font-size: 20px; font-weight: 700; }
+  .qr-status-sub { color: rgba(255,255,255,0.4); font-size: 14px; margin-top: 8px; }
+
+  /* ============ SESSION ============ */
+  .session-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .session-header h2 {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text-primary);
+    flex: 1;
+  }
+
+  .connection-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .connection-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .connection-dot.green { background: var(--green); box-shadow: 0 0 8px rgba(0,184,148,0.4); }
+  .connection-dot.yellow { background: #e17055; box-shadow: 0 0 8px rgba(225,112,85,0.4); }
+  .connection-dot.gray { background: var(--text-muted); }
+  .connection-status .label { font-size: 13px; color: var(--text-secondary); }
+  .connection-status .value { font-size: 14px; font-weight: 700; }
+  .connection-status .value.connected { color: var(--green); }
+  .connection-status .value.disconnected { color: var(--red); }
+
+  .balance-card {
+    padding: 32px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .balance-label { font-size: 13px; color: var(--text-secondary); font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+  .balance-value { font-size: 48px; font-weight: 900; }
+  .balance-value.positive { color: var(--accent); }
+  .balance-value.negative { color: var(--red); }
+  .balance-currency { font-size: 20px; font-weight: 500; opacity: 0.5; margin-left: 4px; }
+
+  .session-status-banner {
+    padding: 16px 20px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+  }
+  .session-status-banner.active { color: var(--green); box-shadow: var(--shadow-in); }
+  .session-status-banner.insufficient { color: #e17055; box-shadow: var(--shadow-in); }
+  .session-status-banner.disconnected { color: var(--text-muted); box-shadow: var(--shadow-in); }
+
+  .input-panel {
+    margin-top: auto;
+    display: flex;
+    gap: 14px;
+    padding-top: 16px;
+    justify-content: center;
+  }
+  .input-panel .media-btn {
+    width: 64px; height: 64px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 20px;
+    font-size: 24px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg);
+    border: none;
+    box-shadow: var(--shadow-out);
+  }
+  .input-panel .media-btn:hover { box-shadow: var(--shadow-out-sm); }
+  .input-panel .media-btn:active { box-shadow: var(--shadow-in); }
+  .input-panel .media-btn.disabled { opacity: 0.35; cursor: default; pointer-events: none; }
+
+  /* ============ CONTROLS ============ */
+  .controls-panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(224,229,236,0.95);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(255,255,255,0.6);
+    padding: 12px 20px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .controls-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .ctrl-btn {
+    padding: 7px 14px;
+    border: none;
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 2px 2px 4px #b8bec7, -2px -2px 4px #ffffff;
+  }
+  .ctrl-btn:hover { box-shadow: 1px 1px 2px #b8bec7, -1px -1px 2px #ffffff; }
+  .ctrl-btn.active { background: var(--accent); color: #fff; box-shadow: inset 2px 2px 4px rgba(0,0,0,0.15); }
+  .controls-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; text-align: center; font-weight: 600; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.95); }
+  }
+</style>
+</head>
+<body>
+
+<div class="variant-label">Neumorphism</div>
+
+<div class="phone-frame">
+  <div class="status-bar">
+    <span>9:41</span>
+    <div class="notch"></div>
+    <span style="font-size:14px;">&#x1F4F6; &#x1F50B;</span>
+  </div>
+
+  <!-- SPLASH -->
+  <div class="screen active" id="screen-splash">
+    <div class="splash-content">
+      <div class="splash-logo-wrap">
+        <span>&#9835;</span>
+      </div>
+      <div class="splash-title">Лира</div>
+      <div class="splash-spinner"></div>
+      <div class="splash-text">Загрузка...</div>
+    </div>
+  </div>
+
+  <!-- REGISTRATION -->
+  <div class="screen" id="screen-reg">
+    <div class="reg-logo-wrap">
+      <span>&#9835;</span>
+    </div>
+    <div class="reg-title" id="reg-title">Введите номер телефона</div>
+    <div class="reg-subtitle" id="reg-subtitle">Мы отправим SMS с кодом подтверждения</div>
+
+    <div id="reg-phone-section">
+      <input type="text" class="input-field" id="reg-phone" placeholder="+7 (900) 123-45-67" value="+7 (900) 123-45-67">
+      <div id="reg-sms-status"></div>
+      <div style="margin-top:20px;">
+        <button class="btn-primary" id="reg-send-btn" onclick="regSendCode()">Получить код</button>
+      </div>
+    </div>
+
+    <div id="reg-code-section" style="display:none;">
+      <div class="code-inputs">
+        <input type="text" maxlength="1" value="4">
+        <input type="text" maxlength="1" value="8">
+        <input type="text" maxlength="1" value="2">
+        <input type="text" maxlength="1" value="">
+      </div>
+      <button class="btn-primary" onclick="showScreen('home')">Подтвердить</button>
+      <div class="attempts" id="reg-attempts"></div>
+    </div>
+  </div>
+
+  <!-- HOME -->
+  <div class="screen" id="screen-home">
+    <div class="app-bar">
+      <h1>Лира</h1>
+      <div class="icon-btn" onclick="showScreen('reg')" title="Выйти">&#x2715;</div>
+    </div>
+
+
+    <div class="neu-out" style="padding:28px;text-align:center;margin-bottom:24px;">
+      <div style="font-size:13px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Баланс</div>
+      <div style="font-size:40px;font-weight:900;color:var(--accent);">1 250,00 <span style="font-size:18px;font-weight:500;opacity:0.5;">₽</span></div>
+      <button class="btn-ghost" style="margin-top:14px;padding:10px 28px;font-size:14px;" onclick="alert('Пополнение баланса')">Пополнить</button>
+    </div>
+
+    <div class="scan-btn" onclick="showScreen('qr')">
+      <span class="scan-icon">&#128247;</span>
+      Сканировать QR
+    </div>
+
+    <div class="section-title">Активные сессии</div>
+
+    <div id="home-sessions">
+      <div class="session-card neu-out" onclick="showSession('active')">
+        <div class="status-indicator green">&#9989;</div>
+        <div class="session-info">
+          <div class="session-name">БухгалтерияПредприятия 3.0</div>
+          <div class="session-status-label active">Активна</div>
+        </div>
+        <div class="session-arrow">&#8250;</div>
+      </div>
+      <div class="session-card neu-out" onclick="showSession('insufficient')">
+        <div class="status-indicator yellow">&#9888;</div>
+        <div class="session-info">
+          <div class="session-name">ЗарплатаИУправление 3.1</div>
+          <div class="session-status-label insufficient">Пополните баланс</div>
+        </div>
+        <div class="session-arrow">&#8250;</div>
+      </div>
+      <div class="session-card neu-out" onclick="showSession('disconnected')">
+        <div class="status-indicator gray">&#9898;</div>
+        <div class="session-info">
+          <div class="session-name">УправлениеТорговлей 11.5</div>
+          <div class="session-status-label disconnected">Чат отключён</div>
+        </div>
+        <div class="session-arrow">&#8250;</div>
+      </div>
+    </div>
+
+    <div id="home-empty" style="display:none;">
+      <div class="empty-state neu-out">
+        <div class="empty-icon">&#128225;</div>
+        <div>Нет активных сессий<br>Отсканируйте QR-код в 1С для подключения</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR SCANNER -->
+  <div class="screen qr-screen" id="screen-qr">
+    <div class="qr-back">
+      <div class="icon-btn" onclick="showScreen('home')">&#x2190;</div>
+    </div>
+    <div class="qr-viewfinder" id="qr-viewfinder">
+      <div class="qr-frame">
+        <div class="qr-corner tl"></div>
+        <div class="qr-corner tr"></div>
+        <div class="qr-corner bl"></div>
+        <div class="qr-corner br"></div>
+        <div class="qr-scan-line" id="qr-scan-line"></div>
+      </div>
+      <div class="qr-hint" id="qr-hint">Наведите камеру на QR-код в 1С</div>
+    </div>
+
+    <div class="qr-status-overlay" id="qr-connecting">
+      <div class="qr-status-icon" style="animation: pulse 1.5s infinite;">&#x23F3;</div>
+      <div class="qr-status-text">Подключение...</div>
+      <div class="qr-status-sub">Устанавливаем соединение</div>
+    </div>
+
+    <div class="qr-status-overlay" id="qr-auth">
+      <div class="qr-status-icon" style="animation: pulse 1.5s infinite;">&#x1F510;</div>
+      <div class="qr-status-text">Авторизация...</div>
+      <div class="qr-status-sub">Проверяем данные</div>
+    </div>
+
+    <div class="qr-status-overlay" id="qr-success">
+      <div class="qr-status-icon">&#x2705;</div>
+      <div class="qr-status-text" style="color: #00b894;">Подключено!</div>
+      <div class="qr-status-sub">Переход к сессии...</div>
+    </div>
+
+    <div class="qr-status-overlay" id="qr-error">
+      <div class="qr-status-icon">&#x274C;</div>
+      <div class="qr-status-text" style="color: #d63031;">Ошибка подключения</div>
+      <div class="qr-status-sub">Попробуйте отсканировать QR-код ещё раз</div>
+      <div style="margin-top:24px;">
+        <button class="btn-ghost" style="background:rgba(255,255,255,0.08);color:#fff;box-shadow:none;" onclick="setQrState('scanning')">Повторить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SESSION -->
+  <div class="screen" id="screen-session">
+    <div class="session-header">
+      <div class="icon-btn" onclick="showScreen('home')">&#x2190;</div>
+      <h2 id="session-title">БухгалтерияПредприятия 3.0</h2>
+    </div>
+
+    <div class="connection-status neu-out-sm" id="session-connection">
+      <div class="connection-dot green" id="session-conn-dot"></div>
+      <span class="label">Статус:</span>
+      <span class="value connected" id="session-conn-text">Подключено</span>
+    </div>
+
+    <div class="balance-card neu-out" id="session-balance-card">
+      <div class="balance-label">Баланс</div>
+      <div class="balance-value positive" id="session-balance">1 250.00<span class="balance-currency">руб</span></div>
+    </div>
+
+    <div class="session-status-banner active" id="session-status-banner">
+      Сессия активна
+    </div>
+
+    <div style="flex:1;"></div>
+
+    <div class="input-panel" id="session-input-panel">
+      <div class="media-btn" id="mic-btn">&#x1F399;</div>
+      <div class="media-btn" id="cam-btn">&#x1F4F7;</div>
+    </div>
+  </div>
+</div>
+
+<!-- CONTROLS -->
+<div class="controls-panel">
+  <div class="controls-label">Экраны</div>
+  <div class="controls-row">
+    <button class="ctrl-btn active" onclick="showScreen('splash')">Splash</button>
+    <button class="ctrl-btn" onclick="showScreen('reg')">Регистрация</button>
+    <button class="ctrl-btn" onclick="showScreen('home')">Главная</button>
+    <button class="ctrl-btn" onclick="showScreen('qr')">QR Сканер</button>
+    <button class="ctrl-btn" onclick="showScreen('session')">Сессия</button>
+  </div>
+
+  <div class="controls-label" style="margin-top:4px;">Состояния</div>
+  <div class="controls-row" id="state-controls"></div>
+</div>
+
+<script>
+  let currentScreen = 'splash';
+  let regState = 'phone';
+
+  function showScreen(name) {
+    currentScreen = name;
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+
+    document.querySelectorAll('.controls-row')[0].querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+    const btns = document.querySelectorAll('.controls-row')[0].querySelectorAll('.ctrl-btn');
+    const map = { splash: 0, reg: 1, home: 2, qr: 3, session: 4 };
+    if (btns[map[name]]) btns[map[name]].classList.add('active');
+
+    updateStateControls();
+  }
+
+  function showSession(state) {
+    showScreen('session');
+    setSessionState(state);
+  }
+
+  function updateStateControls() {
+    const container = document.getElementById('state-controls');
+    container.innerHTML = '';
+
+    if (currentScreen === 'splash') {
+      // No states
+    } else if (currentScreen === 'reg') {
+      ['Ввод телефона', 'SMS отправлено', 'Ошибка'].forEach((label, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'ctrl-btn' + (i === 0 && regState === 'phone' || i === 1 && regState === 'code' || i === 2 && regState === 'error' ? ' active' : '');
+        btn.textContent = label;
+        btn.onclick = () => { setRegState(['phone','code','error'][i]); };
+        container.appendChild(btn);
+      });
+    } else if (currentScreen === 'home') {
+      ['С сессиями', 'Без сессий'].forEach((label, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'ctrl-btn' + (i === 0 ? ' active' : '');
+        btn.textContent = label;
+        btn.onclick = () => {
+          container.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById('home-sessions').style.display = i === 0 ? 'block' : 'none';
+          document.getElementById('home-empty').style.display = i === 1 ? 'block' : 'none';
+        };
+        container.appendChild(btn);
+      });
+    } else if (currentScreen === 'qr') {
+      ['Сканирование', 'Подключение', 'Авторизация', 'Готово', 'Ошибка'].forEach((label, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'ctrl-btn' + (i === 0 ? ' active' : '');
+        btn.textContent = label;
+        btn.onclick = () => {
+          container.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          setQrState(['scanning','connecting','auth','success','error'][i]);
+        };
+        container.appendChild(btn);
+      });
+    } else if (currentScreen === 'session') {
+      ['Активна', 'Недост. баланс', 'Отключена'].forEach((label, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'ctrl-btn' + (i === 0 ? ' active' : '');
+        btn.textContent = label;
+        btn.onclick = () => {
+          container.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          setSessionState(['active','insufficient','disconnected'][i]);
+        };
+        container.appendChild(btn);
+      });
+    }
+  }
+
+  function regSendCode() { setRegState('code'); }
+
+  function setRegState(state) {
+    regState = state;
+    const phone = document.getElementById('reg-phone');
+    const status = document.getElementById('reg-sms-status');
+    const codeSection = document.getElementById('reg-code-section');
+    const sendBtn = document.getElementById('reg-send-btn');
+    const attempts = document.getElementById('reg-attempts');
+    const title = document.getElementById('reg-title');
+    const subtitle = document.getElementById('reg-subtitle');
+
+    if (state === 'phone') {
+      phone.disabled = false;
+      status.innerHTML = '';
+      codeSection.style.display = 'none';
+      sendBtn.style.display = 'block';
+      title.textContent = 'Введите номер телефона';
+      subtitle.textContent = 'Мы отправим SMS с кодом подтверждения';
+      attempts.textContent = '';
+    } else if (state === 'code') {
+      phone.disabled = true;
+      status.innerHTML = '<div class="sms-sent">SMS отправлено на +7 (900) 123-45-67</div><span class="change-link" onclick="setRegState(\'phone\')">Изменить номер</span>';
+      codeSection.style.display = 'block';
+      sendBtn.style.display = 'none';
+      title.textContent = 'Введите код';
+      subtitle.textContent = 'Код из SMS, 4 цифры';
+      attempts.textContent = '';
+    } else if (state === 'error') {
+      phone.disabled = true;
+      status.innerHTML = '<div class="sms-error">Неверный код подтверждения</div><span class="change-link" onclick="setRegState(\'phone\')">Изменить номер</span>';
+      codeSection.style.display = 'block';
+      sendBtn.style.display = 'none';
+      title.textContent = 'Введите код';
+      subtitle.textContent = 'Код из SMS, 4 цифры';
+      attempts.textContent = 'Осталось попыток: 2 из 3';
+    }
+    updateStateControls();
+  }
+
+  function setQrState(state) {
+    ['qr-connecting','qr-auth','qr-success','qr-error'].forEach(id => {
+      document.getElementById(id).classList.remove('active');
+    });
+    const scanLine = document.getElementById('qr-scan-line');
+    const hint = document.getElementById('qr-hint');
+
+    if (state === 'scanning') {
+      scanLine.style.display = 'block';
+      hint.textContent = 'Наведите камеру на QR-код в 1С';
+    } else if (state === 'connecting') {
+      scanLine.style.display = 'none';
+      document.getElementById('qr-connecting').classList.add('active');
+    } else if (state === 'auth') {
+      scanLine.style.display = 'none';
+      document.getElementById('qr-auth').classList.add('active');
+    } else if (state === 'success') {
+      scanLine.style.display = 'none';
+      document.getElementById('qr-success').classList.add('active');
+    } else if (state === 'error') {
+      scanLine.style.display = 'none';
+      document.getElementById('qr-error').classList.add('active');
+    }
+  }
+
+  function setSessionState(state) {
+    const dot = document.getElementById('session-conn-dot');
+    const text = document.getElementById('session-conn-text');
+    const balance = document.getElementById('session-balance');
+    const banner = document.getElementById('session-status-banner');
+    const mic = document.getElementById('mic-btn');
+    const cam = document.getElementById('cam-btn');
+    const title = document.getElementById('session-title');
+
+    if (state === 'active') {
+      dot.className = 'connection-dot green';
+      text.className = 'value connected';
+      text.textContent = 'Подключено';
+      balance.className = 'balance-value positive';
+      balance.innerHTML = '1 250.00<span class="balance-currency">руб</span>';
+      banner.className = 'session-status-banner active';
+      banner.textContent = 'Сессия активна';
+      mic.classList.remove('disabled');
+      cam.classList.remove('disabled');
+      title.textContent = 'БухгалтерияПредприятия 3.0';
+    } else if (state === 'insufficient') {
+      dot.className = 'connection-dot yellow';
+      text.className = 'value connected';
+      text.textContent = 'Подключено';
+      balance.className = 'balance-value negative';
+      balance.innerHTML = '0.00<span class="balance-currency">руб</span>';
+      banner.className = 'session-status-banner insufficient';
+      banner.textContent = 'Пополните баланс';
+      mic.classList.add('disabled');
+      cam.classList.add('disabled');
+      title.textContent = 'ЗарплатаИУправление 3.1';
+    } else if (state === 'disconnected') {
+      dot.className = 'connection-dot gray';
+      text.className = 'value disconnected';
+      text.textContent = 'Отключено';
+      balance.className = 'balance-value negative';
+      balance.innerHTML = '&mdash;<span class="balance-currency">руб</span>';
+      banner.className = 'session-status-banner disconnected';
+      banner.textContent = 'Чат отключён';
+      mic.classList.add('disabled');
+      cam.classList.add('disabled');
+      title.textContent = 'УправлениеТорговлей 11.5';
+    }
+  }
+
+  updateStateControls();
+</script>
+</body>
+</html>

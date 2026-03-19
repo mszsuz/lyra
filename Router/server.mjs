@@ -17,6 +17,7 @@ import { writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 
 const TAG = 'server';
 
@@ -172,6 +173,7 @@ centrifugo.onPush((push) => {
   if (channel === 'mobile:lobby') {
     if (data.type === 'register') handleMobileRegister(data, clientUUID);
     if (data.type === 'confirm') handleMobileConfirm(data, clientUUID);
+    if (data.type === 'get_sessions') handleGetSessions(data, clientUUID);
     return;
   }
 
@@ -213,6 +215,8 @@ centrifugo.onPush((push) => {
 // --- Hello ---
 
 const _pendingHellos = new Set(); // guard against concurrent hellos with same form_id
+const _pendingRegistrations = new Map(); // reg_id → { phone, deviceId, code, clientUUID, attempts, created }
+const _phoneToUser = new Map(); // phone → userId (in-memory cache for re-registration)
 
 async function handleHello(data, clientUUID) {
   log.info(TAG, `hello from client=${clientUUID}`, {
@@ -447,26 +451,147 @@ function handleDisconnect(session) {
   // Не удаляем сессию — клиент может переподключиться по form_id (TTL 30 мин)
 }
 
-// --- Mobile registration (MVP stubs) ---
+// --- Mobile registration ---
+
+const REG_TTL = 5 * 60 * 1000; // 5 minutes
+const REG_MAX_ATTEMPTS = 3;
 
 async function handleMobileRegister(data, clientUUID) {
-  const { phone } = data;
-  log.info(TAG, `mobile register: phone=${phone}`);
+  const { phone, device_id } = data;
+  log.info(TAG, `mobile register: phone=${phone}, device_id=${device_id}`);
 
-  // MVP: accept any phone, generate fake code
-  // In production: send SMS, rate limit, store in MDM
-  // For now just acknowledge — mobile app will show confirm screen
-  // We don't have a way to publish back to mobile:lobby for specific client
-  // so the mobile app should subscribe to its own channel after register
+  if (!phone) {
+    log.warn(TAG, 'register: missing phone');
+    return;
+  }
+
+  const regId = randomUUID();
+  const code = String(Math.floor(1000 + Math.random() * 9000)); // 4-digit code
+
+  _pendingRegistrations.set(regId, {
+    phone,
+    deviceId: device_id || null,
+    code,
+    clientUUID,
+    attempts: 0,
+    created: Date.now(),
+  });
+
+  log.info(TAG, `📱 REGISTRATION CODE for ${phone}: ${code} (reg_id=${regId})`);
+
+  // Subscribe mobile client to personal registration channel
+  try {
+    await centrifugo.apiSubscribe('mobile-reg', clientUUID, `mobile:reg-${regId}`);
+  } catch (err) {
+    log.error(TAG, `Failed to subscribe to mobile:reg-${regId}: ${err.message}`);
+  }
+
+  // Notify client that SMS was "sent"
+  await centrifugo.apiPublish(`mobile:reg-${regId}`, { type: 'sms_sent', reg_id: regId });
 }
 
 async function handleMobileConfirm(data, clientUUID) {
-  const { phone, code, reg_id } = data;
-  log.info(TAG, `mobile confirm: phone=${phone}, code=${code}`);
+  const { reg_id, code } = data;
+  log.info(TAG, `mobile confirm: reg_id=${reg_id}, code=${code}`);
 
-  // MVP: accept any code
-  // In production: verify code, create user in MDM, return user_id + device_id
+  const regChannel = `mobile:reg-${reg_id}`;
+  const reg = _pendingRegistrations.get(reg_id);
+
+  // Not found or expired
+  if (!reg || (Date.now() - reg.created > REG_TTL)) {
+    if (reg) _pendingRegistrations.delete(reg_id);
+    await centrifugo.apiPublish(regChannel, { type: 'confirm_error', reason: 'expired' });
+    return;
+  }
+
+  // Wrong code
+  if (reg.code !== code) {
+    reg.attempts++;
+    if (reg.attempts >= REG_MAX_ATTEMPTS) {
+      _pendingRegistrations.delete(reg_id);
+      await centrifugo.apiPublish(regChannel, { type: 'confirm_error', reason: 'max_attempts' });
+      return;
+    }
+    await centrifugo.apiPublish(regChannel, {
+      type: 'confirm_error',
+      reason: 'invalid_code',
+      attempts_remaining: REG_MAX_ATTEMPTS - reg.attempts,
+    });
+    return;
+  }
+
+  // Code matches — register user
+  const existingUserId = _phoneToUser.get(reg.phone);
+  const userId = existingUserId || randomUUID();
+
+  // Register in users.mjs (creates user if not exists)
+  verifyAuth(userId, reg.deviceId);
+
+  // Save phone in user profile
+  const profile = getUserConfig(userId, null);
+  saveUserSettings(userId, { phone: reg.phone }, null);
+
+  // Update phone→user mapping
+  _phoneToUser.set(reg.phone, userId);
+
+  // Publish success
+  await centrifugo.apiPublish(regChannel, { type: 'register_ack', user_id: userId });
+  _pendingRegistrations.delete(reg_id);
+
+  log.info(TAG, `📱 Registration complete: phone=${reg.phone}, user_id=${userId}`);
 }
+
+// --- Get sessions (mobile) ---
+
+async function handleGetSessions(data, clientUUID) {
+  const { user_id } = data;
+  log.info(TAG, `get_sessions: user_id=${user_id}`);
+
+  if (!user_id) {
+    log.warn(TAG, 'get_sessions: missing user_id');
+    return;
+  }
+
+  const allSessions = sessions.getAll();
+  const activeStatuses = new Set(['active', 'insufficient_balance', 'disconnected']);
+
+  const list = allSessions
+    .filter(s => s.userId === user_id && activeStatuses.has(s.status))
+    .map(s => ({
+      session_id: s.sessionId,
+      channel: s.channel,
+      config_name: s.configName,
+      config_version: s.configVersion,
+      status: s.status,
+      balance: 999999, // MVP
+      created: new Date(s.created).toISOString(),
+      last_activity: new Date(s.lastActivity).toISOString(),
+      mobile_jwt: s.mobileJwt || null,
+    }));
+
+  const responseChannel = `mobile:sessions-${user_id}`;
+
+  try {
+    await centrifugo.apiSubscribe('mobile-sessions', clientUUID, responseChannel);
+  } catch (err) {
+    log.error(TAG, `Failed to subscribe to ${responseChannel}: ${err.message}`);
+  }
+
+  await centrifugo.apiPublish(responseChannel, { type: 'sessions_list', sessions: list });
+  log.info(TAG, `sessions_list sent: ${list.length} sessions for user ${user_id}`);
+}
+
+// --- Cleanup expired registrations (every 60s) ---
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [regId, reg] of _pendingRegistrations) {
+    if (now - reg.created > REG_TTL) {
+      _pendingRegistrations.delete(regId);
+      log.info(TAG, `Expired registration removed: reg_id=${regId}, phone=${reg.phone}`);
+    }
+  }
+}, 60 * 1000);
 
 // --- Spawn Claude ---
 

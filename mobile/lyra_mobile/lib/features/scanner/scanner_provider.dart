@@ -185,6 +185,13 @@ class ScannerNotifier extends StateNotifier<ScannerState> {
     }
   }
 
+  void reset() {
+    _messagesSub?.cancel();
+    _messagesSub = null;
+    _currentMobileJwt = '';
+    state = const ScannerState();
+  }
+
   String _statusText(String status) {
     return switch (status) {
       'auth_failed' => 'Ошибка авторизации',

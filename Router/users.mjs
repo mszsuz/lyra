@@ -182,6 +182,10 @@ export function saveUserSettings(userId, settings, baseIds) {
     profile.user_level = settings.user_level;
     profileChanged = true;
   }
+  if (settings.phone !== undefined) {
+    profile.phone = settings.phone;
+    profileChanged = true;
+  }
 
   if (profileChanged) {
     if (!profile.created_at) profile.created_at = new Date().toISOString();
