@@ -67,22 +67,25 @@ sealed class IncomingMessage {
 
 class SmsSentMessage implements IncomingMessage {
   final String regId;
+  final String? phone;
 
-  SmsSentMessage({required this.regId});
+  SmsSentMessage({required this.regId, this.phone});
 
   factory SmsSentMessage.fromJson(Map<String, dynamic> json) =>
-      SmsSentMessage(regId: json['reg_id'] as String);
+      SmsSentMessage(regId: json['reg_id'] as String, phone: json['phone'] as String?);
 }
 
 class RegisterAckMessage implements IncomingMessage {
+  final String? regId;
   final String status;
   final String? userId;
 
-  RegisterAckMessage({required this.status, this.userId});
+  RegisterAckMessage({this.regId, required this.status, this.userId});
 
   factory RegisterAckMessage.fromJson(Map<String, dynamic> json) =>
       RegisterAckMessage(
-        status: json['status'] as String,
+        regId: json['reg_id'] as String?,
+        status: json['status'] as String? ?? 'ok',
         userId: json['user_id'] as String?,
       );
 }
@@ -101,15 +104,17 @@ class RegisterErrorMessage implements IncomingMessage {
 }
 
 class ConfirmErrorMessage implements IncomingMessage {
+  final String? regId;
   final String reason;
   final int? attemptsLeft;
 
-  ConfirmErrorMessage({required this.reason, this.attemptsLeft});
+  ConfirmErrorMessage({this.regId, required this.reason, this.attemptsLeft});
 
   factory ConfirmErrorMessage.fromJson(Map<String, dynamic> json) =>
       ConfirmErrorMessage(
+        regId: json['reg_id'] as String?,
         reason: json['reason'] as String,
-        attemptsLeft: json['attempts_left'] as int?,
+        attemptsLeft: (json['attempts_remaining'] ?? json['attempts_left']) as int?,
       );
 }
 

@@ -41,12 +41,12 @@
 ### Флоу регистрации
 
 ```text
-1. Мобильное подключается к Centrifugo с общим mobile-lobby JWT
+1. Мобильное подключается к Centrifugo с общим mobile-lobby JWT (channels claim: ["mobile:lobby"])
 2. Мобильное → mobile:lobby: register {phone, device_id}
-3. Роутер: генерирует reg_id, отправляет SMS, Server API subscribe на mobile:reg-<reg_id>
-4. Роутер → mobile:reg-<reg_id>: sms_sent {reg_id}
+3. Роутер: генерирует reg_id, отправляет SMS
+4. Роутер → mobile:lobby: sms_sent {reg_id, phone}
 5. Мобильное → mobile:lobby: confirm {reg_id, code}
-6. Роутер → mobile:reg-<reg_id>: register_ack {user_id} (или confirm_error при ошибке)
+6. Роутер → mobile:lobby: register_ack {reg_id, status, user_id} (или confirm_error {reg_id, reason, attempts_left})
 7. user_id сохраняется на устройстве в secure storage (Keychain / Keystore)
 ```
 
@@ -54,7 +54,11 @@ SMS отправляется **при каждой регистрации** — 
 
 ### Адресация при регистрации
 
-При регистрации используется та же схема адресации, что и для Чата: Server API subscribe по `pub.info.client` UUID подписывает конкретное соединение мобильного на персональный канал `mobile:reg-<reg_id>`. Мобильное продолжает publish `confirm` в `mobile:lobby`, а ответы (`sms_sent`, `register_ack`) приходят в персональный канал.
+Все ответы публикуются в общий канал `mobile:lobby`. Фильтрация на клиенте:
+- `sms_sent` — по `phone` (мобильное принимает только свой номер)
+- `register_ack`, `confirm_error` — по `reg_id` (мобильное принимает только свой reg_id)
+
+Мобильное подписано на `mobile:lobby` через JWT channels claim (авто-подписка при connect).
 
 Восстановление на новом устройстве: тот же флоу через `mobile:lobby` — register → SMS → confirm → register_ack (MDM возвращает существующий `user_id`).
 
@@ -137,13 +141,12 @@ centrifuge-dart обрабатывает протокол Centrifugo и отда
 Пример raw WS-трафика при регистрации (подключение с mobile-lobby JWT, publish register в mobile:lobby):
 
 ```
-<< {"id":1,"connect":{"client":"d42eb19c-...","version":"6.6.2 OSS","expires":true,"ttl":31532436,"ping":25,"pong":true}}
+<< {"id":1,"connect":{"client":"d42eb19c-...","version":"6.6.2 OSS","expires":true,"ttl":31532436,"ping":25,"pong":true,"subs":{"mobile:lobby":{}}}}
 << {"id":2,"publish":{}}
-<< {"push":{"channel":"mobile:reg-<reg_id>","subscribe":{}}}
-<< {"push":{"channel":"mobile:reg-<reg_id>","pub":{"data":{"type":"sms_sent","reg_id":"<reg_id>"}}}}
+<< {"push":{"channel":"mobile:lobby","pub":{"data":{"type":"sms_sent","reg_id":"<reg_id>","phone":"+79001234567"}}}}
 ```
 
-centrifuge-dart из последнего push отдаёт в `publication.data` только `{"type":"sms_sent","reg_id":"<reg_id>"}`.
+centrifuge-dart из последнего push отдаёт в `publication.data` только `{"type":"sms_sent","reg_id":"<reg_id>","phone":"+79001234567"}`. Фильтрация по phone/reg_id на клиенте.
 
 **ВАЖНО:** Роутер может отправлять pretty-printed JSON (с переносами строк внутри объекта). Это **не** мульти-JSON — это один объект. `jsonDecode()` парсит его корректно без split.
 

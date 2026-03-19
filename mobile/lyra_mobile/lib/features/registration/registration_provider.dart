@@ -51,6 +51,7 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
   final CentrifugoClient _centrifugo;
   final SecureStorage _storage;
   StreamSubscription<IncomingMessage>? _messagesSub;
+  String _pendingPhone = '';
 
   RegistrationNotifier(this._centrifugo, this._storage)
       : super(const RegistrationState()) {
@@ -58,6 +59,7 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
   }
 
   Future<void> sendPhone(String phone) async {
+    _pendingPhone = phone;
     state = state.copyWith(step: RegistrationStep.waitingSms);
 
     try {
@@ -102,13 +104,17 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
 
   void _onMessage(IncomingMessage message) {
     switch (message) {
-      case SmsSentMessage(:final regId):
+      case SmsSentMessage(:final regId, :final phone):
+        // Filter: only accept sms_sent for our phone number
+        if (phone != null && phone != _pendingPhone) break;
         state = state.copyWith(
           step: RegistrationStep.codeInput,
           regId: regId,
         );
 
-      case RegisterAckMessage(:final status, :final userId):
+      case RegisterAckMessage(:final regId, :final status, :final userId):
+        // Filter: only accept register_ack for our reg_id
+        if (regId != null && regId != state.regId) break;
         if (status == 'ok' && userId != null) {
           _storage.saveUserId(userId);
           _centrifugo.disconnect();
@@ -127,7 +133,9 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
           retryAfter: retryAfter,
         );
 
-      case ConfirmErrorMessage(:final reason, :final attemptsLeft):
+      case ConfirmErrorMessage(:final regId, :final reason, :final attemptsLeft):
+        // Filter: only accept confirm_error for our reg_id
+        if (regId != null && regId != state.regId) break;
         state = state.copyWith(
           step: RegistrationStep.codeInput,
           errorMessage: _errorText(reason),

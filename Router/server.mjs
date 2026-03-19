@@ -285,41 +285,21 @@ async function handleHello(data, clientUUID) {
     log.error(TAG, `Failed to subscribe router to ${session.channel}: ${err.message}`);
   }
 
-  // MVP: auto-auth — include auth status directly in hello_ack
-  // (In production, auth_ack comes later after mobile QR scan)
-  session.status = 'active';
-  session.userId = 'mvp-user';
+  // Session awaits mobile auth (QR scan)
+  session.status = 'awaiting_auth';
 
-  // Read user config (naparnik token etc.)
-  const userConfig = getUserConfig(session.userId, session.baseIds);
-  session.naparnikToken = userConfig.naparnikToken || '';
-  session.userName = userConfig.userName || '';
-  session.dbName = userConfig.dbName || '';
-  session.dbId = userConfig.dbId || '';
-  session.settingsFile = userConfig.settingsFile || '';
-
-  // Publish hello_ack with auto_auth flag and user settings
+  // Publish hello_ack with mobile_jwt for QR display
   const helloAck = {
     type: 'hello_ack',
     session_id: session.sessionId,
     status: 'new',
     chat_jwt: chatJwt,
     mobile_jwt: mobileJwt,
-    auto_auth: true,
-    naparnik_token: userConfig.naparnikToken || '',
-    settings: {
-      user_name: userConfig.userName || '',
-      user_level: userConfig.userLevel || '',
-      db_name: userConfig.dbName || '',
-    },
   };
   await centrifugo.apiPublish(session.channel, helloAck);
   writeHistory(session, 'out', helloAck);
 
-  log.info(TAG, `hello_ack sent for session ${session.sessionId} (auto_auth=true)`);
-
-  // Spawn Claude CLI immediately (auth already done)
-  spawnClaudeForSession(session);
+  log.info(TAG, `hello_ack sent for session ${session.sessionId} (awaiting mobile auth)`);
 }
 
 // --- Chat ---
@@ -479,28 +459,20 @@ async function handleMobileRegister(data, clientUUID) {
 
   log.info(TAG, `📱 REGISTRATION CODE for ${phone}: ${code} (reg_id=${regId})`);
 
-  // Subscribe mobile client to personal registration channel
-  try {
-    await centrifugo.apiSubscribe('mobile-reg', clientUUID, `mobile:reg-${regId}`);
-  } catch (err) {
-    log.error(TAG, `Failed to subscribe to mobile:reg-${regId}: ${err.message}`);
-  }
-
-  // Notify client that SMS was "sent"
-  await centrifugo.apiPublish(`mobile:reg-${regId}`, { type: 'sms_sent', reg_id: regId });
+  // Send sms_sent to mobile:lobby — client is subscribed via channels claim in JWT
+  await centrifugo.apiPublish('mobile:lobby', { type: 'sms_sent', reg_id: regId, phone });
 }
 
 async function handleMobileConfirm(data, clientUUID) {
   const { reg_id, code } = data;
   log.info(TAG, `mobile confirm: reg_id=${reg_id}, code=${code}`);
 
-  const regChannel = `mobile:reg-${reg_id}`;
   const reg = _pendingRegistrations.get(reg_id);
 
   // Not found or expired
   if (!reg || (Date.now() - reg.created > REG_TTL)) {
     if (reg) _pendingRegistrations.delete(reg_id);
-    await centrifugo.apiPublish(regChannel, { type: 'confirm_error', reason: 'expired' });
+    await centrifugo.apiPublish('mobile:lobby', { type: 'confirm_error', reg_id, reason: 'expired' });
     return;
   }
 
@@ -509,11 +481,12 @@ async function handleMobileConfirm(data, clientUUID) {
     reg.attempts++;
     if (reg.attempts >= REG_MAX_ATTEMPTS) {
       _pendingRegistrations.delete(reg_id);
-      await centrifugo.apiPublish(regChannel, { type: 'confirm_error', reason: 'max_attempts' });
+      await centrifugo.apiPublish('mobile:lobby', { type: 'confirm_error', reg_id, reason: 'max_attempts' });
       return;
     }
-    await centrifugo.apiPublish(regChannel, {
+    await centrifugo.apiPublish('mobile:lobby', {
       type: 'confirm_error',
+      reg_id,
       reason: 'invalid_code',
       attempts_remaining: REG_MAX_ATTEMPTS - reg.attempts,
     });
@@ -528,14 +501,13 @@ async function handleMobileConfirm(data, clientUUID) {
   verifyAuth(userId, reg.deviceId);
 
   // Save phone in user profile
-  const profile = getUserConfig(userId, null);
   saveUserSettings(userId, { phone: reg.phone }, null);
 
   // Update phone→user mapping
   _phoneToUser.set(reg.phone, userId);
 
   // Publish success
-  await centrifugo.apiPublish(regChannel, { type: 'register_ack', user_id: userId });
+  await centrifugo.apiPublish('mobile:lobby', { type: 'register_ack', reg_id, status: 'ok', user_id: userId });
   _pendingRegistrations.delete(reg_id);
 
   log.info(TAG, `📱 Registration complete: phone=${reg.phone}, user_id=${userId}`);

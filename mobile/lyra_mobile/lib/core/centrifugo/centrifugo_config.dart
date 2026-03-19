@@ -6,5 +6,5 @@ class CentrifugoConfig {
   /// Общий JWT для подключения к mobile:lobby.
   /// Зашивается в приложение, одинаковый для всех пользователей.
   static const mobileLobbyJwt =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJtb2JpbGUtbG9iYnkiLCJleHAiOjE4MDQ1ODgyMzQsImlhdCI6MTc3MzA1MjIzNH0.a99ECLG7WGFV5P6WOBgii2NpcmgcdvqU40uZPEImWAA';
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJtb2JpbGUtbG9iYnkiLCJjaGFubmVscyI6WyJtb2JpbGU6bG9iYnkiXSwiZXhwIjoxODA1NDg2ODE4fQ.mSNKrQHq2k8fsn3MGJiFV6SijdX5UKMEP1RiW5IbDek';
 }

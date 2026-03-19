@@ -67,9 +67,9 @@ class CentrifugoClient {
       },
     );
 
-    // Для mobile:lobby подписка не нужна (allow_subscribe_for_client: false).
-    // Мобильное только публикует в lobby, ответы приходят на персональный
-    // канал mobile:reg-<reg_id> через server-side subscription.
+    // Подписка на mobile:lobby через channels claim в JWT.
+    // Мобильное публикует register/confirm в lobby,
+    // ответы (sms_sent, register_ack) тоже приходят в lobby.
   }
 
   /// Подключение с персональным JWT (авто-подписка через channels claim).
