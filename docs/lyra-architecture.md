@@ -214,45 +214,45 @@ stdio-bridge
 
 ```
 Мобильное приложение:
-  1. connect к Centrifugo (общий mobile JWT)
+  1. connect к Centrifugo (общий mobile JWT с channels claim: ["mobile:lobby"])
   2. publish register в mobile:lobby:
      {type: "register", phone: "+79001234567", device_id: "uuid-устройства"}
 
 Роутер (подписан на mobile:lobby):
-  3. Получает register (pub.info.client = UUID соединения мобильного)
+  3. Получает register
   4. Проверяет rate limit (15 мин на номер):
-     -> Превышен: генерирует reg_id, подписывает на mobile:reg-<reg_id>, отправляет register_error:
+     -> Превышен: publish register_error в mobile:lobby:
         {type: "register_error", reason: "rate_limited", message: "SMS уже отправлено. Повторная отправка через 12 мин", retry_after: 720}
   5. Генерирует reg_id, отправляет SMS с кодом подтверждения
-  6. Server API subscribe: подписать конкретное соединение мобильного на mobile:reg-<reg_id>
-     subscribe({user: "mobile-lobby-user", client: "<UUID из pub.info>", channel: "mobile:reg-<reg_id>"})
-  7. Server API publish в mobile:reg-<reg_id>:
-     {type: "sms_sent", reg_id: "..."}
-     -> только это мобильное получает (как hello_ack в чате)
+  6. Server API publish в mobile:lobby:
+     {type: "sms_sent", reg_id: "...", phone: "+79001234567"}
+     -> все мобильные получают, фильтрация по phone на клиенте
 
 Мобильное приложение:
+  7. Фильтрует sms_sent по phone (принимает только свой номер)
   8. publish confirm в mobile:lobby (Роутер видит как подписчик lobby):
      {type: "confirm", reg_id: "...", code: "1234"}
 
 Роутер:
   9. Проверяет код:
-     -> Неверный код: publish в mobile:reg-<reg_id>:
-        {type: "confirm_error", reason: "invalid_code", message: "Неверный код", attempts_left: 2}
+     -> Неверный код: publish в mobile:lobby:
+        {type: "confirm_error", reg_id: "...", reason: "invalid_code", attempts_remaining: 2}
      -> 3 неудачные попытки: reg_id сгорает, publish:
-        {type: "confirm_error", reason: "max_attempts", message: "Превышено число попыток. Запросите новый код", attempts_left: 0}
+        {type: "confirm_error", reg_id: "...", reason: "max_attempts"}
      -> Код истёк (5 мин): publish:
-        {type: "confirm_error", reason: "code_expired", message: "Код устарел. Запросите новый", attempts_left: 0}
+        {type: "confirm_error", reg_id: "...", reason: "expired"}
   10. MDM: найти или создать пользователя по номеру телефона
       -> Справочник Пользователи (владелец) + подчинённый справочник Базы
-  11. Server API publish в mobile:reg-<reg_id>:
-      {type: "register_ack", user_id: "uuid", status: "ok"}
+  11. Server API publish в mobile:lobby:
+      {type: "register_ack", reg_id: "...", status: "ok", user_id: "uuid"}
 
 Мобильное приложение:
-  12. Сохраняет user_id в secure storage (Keychain / Keystore)
-  13. Отключается от mobile:lobby -- готово к сканированию QR
+  12. Фильтрует register_ack по reg_id (принимает только свой)
+  13. Сохраняет user_id в secure storage (Keychain / Keystore)
+  14. Отключается от mobile:lobby -- готово к сканированию QR
 ```
 
-Адресация аналогична чату: `pub.info.client` из register = UUID соединения мобильного. Server API subscribe подписывает именно это соединение на персональный канал `mobile:reg-<reg_id>`. Мобильное продолжает publish confirm в `mobile:lobby` (Роутер видит как подписчик). Ответы (sms_sent, register_ack) идут в персональный канал -- другие мобильные не видят.
+Все ответы регистрации публикуются в общий канал `mobile:lobby`. Мобильное подписано через JWT channels claim (авто-подписка при connect). Фильтрация на клиенте: `sms_sent` по `phone`, `register_ack` и `confirm_error` по `reg_id`.
 
 **MDM: справочники**
 - **Пользователи** -- владелец, привязан к номеру телефона
@@ -663,28 +663,30 @@ config_name + connection_string + computer
 - Ошибки содержат `reason` (machine-readable) + `message` (human-readable)
 - `session_id` присутствует во всех сообщениях в контексте сессии
 
-### Регистрация (mobile:lobby ↔ mobile:reg-\<reg_id\>)
+### Регистрация (mobile:lobby)
+
+Все ответы публикуются в `mobile:lobby`. Фильтрация на клиенте по `phone` / `reg_id`.
 
 ```json
 // Мобильное → mobile:lobby
 {"type": "register", "phone": "+79001234567", "device_id": "uuid-устройства"}
 
-// Роутер → mobile:reg-<reg_id>
-{"type": "sms_sent", "reg_id": "uuid-регистрации"}
+// Роутер → mobile:lobby
+{"type": "sms_sent", "reg_id": "uuid-регистрации", "phone": "+79001234567"}
 
 // Мобильное → mobile:lobby
 {"type": "confirm", "reg_id": "uuid-регистрации", "code": "1234"}
 
-// Роутер → mobile:reg-<reg_id> (успех)
-{"type": "register_ack", "status": "ok", "user_id": "uuid-пользователя"}
+// Роутер → mobile:lobby (успех)
+{"type": "register_ack", "reg_id": "uuid-регистрации", "status": "ok", "user_id": "uuid-пользователя"}
 
-// Роутер → mobile:reg-<reg_id> (ошибка)
-{"type": "confirm_error", "reason": "invalid_code", "message": "Неверный код", "attempts_left": 2}
-{"type": "confirm_error", "reason": "max_attempts", "message": "Превышено число попыток. Запросите новый код", "attempts_left": 0}
-{"type": "confirm_error", "reason": "code_expired", "message": "Код устарел. Запросите новый", "attempts_left": 0}
+// Роутер → mobile:lobby (ошибка)
+{"type": "confirm_error", "reg_id": "uuid-регистрации", "reason": "invalid_code", "attempts_remaining": 2}
+{"type": "confirm_error", "reg_id": "uuid-регистрации", "reason": "max_attempts"}
+{"type": "confirm_error", "reg_id": "uuid-регистрации", "reason": "expired"}
 
-// Роутер → mobile:reg-<reg_id> (rate limit)
-{"type": "register_error", "reason": "rate_limited", "message": "SMS уже отправлено. Повторная отправка через 12 мин", "retry_after": 720}
+// Роутер → mobile:lobby (rate limit)
+{"type": "register_error", "reason": "rate_limited", "retry_after": 720}
 ```
 
 ### Список сессий (mobile:lobby)
@@ -693,7 +695,7 @@ config_name + connection_string + computer
 // Мобильное → mobile:lobby (запрос списка сессий пользователя)
 {"type": "get_sessions", "user_id": "uuid-пользователя"}
 
-// Роутер → mobile:sessions-<uuid> (персональный канал, через Server API subscribe + publish)
+// Роутер → mobile:lobby (фильтрация по user_id на клиенте)
 {"type": "sessions_list", "sessions": [
   {"session_id": "uuid", "channel": "session:uuid", "config_name": "БухгалтерияПредприятия", "status": "active", "created": "2026-03-09T12:00:00", "last_activity": "2026-03-09T14:30:00"},
   {"session_id": "uuid2", "channel": "session:uuid2", "config_name": "ЗарплатаИКадры", "status": "disconnected", "created": "2026-03-08T09:00:00", "last_activity": "2026-03-08T18:00:00"}
