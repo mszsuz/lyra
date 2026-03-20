@@ -24,9 +24,15 @@ tempdb/
 *.rar
 *.7z
 
-# Router — данные сессий
+# Router — legacy данные
 Router/.lobby/
 Router/.users/
+Router/users/
+Router/var/
+Router/router.pid
+
+# Рабочий каталог (dataDir)
+TEST-LYRA/
 
 # Vega — отдельный git-репозиторий (github.com/mszsuz/Vega)
 Vega/

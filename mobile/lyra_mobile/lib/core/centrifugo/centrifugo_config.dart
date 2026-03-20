@@ -1,7 +1,7 @@
 class CentrifugoConfig {
   /// WebSocket URL Centrifugo-сервера.
   /// TODO: для production — из remote config.
-  static const wsUrl = 'ws://192.168.1.2:11000/connection/websocket';
+  static const wsUrl = 'ws://192.168.1.2:11911/connection/websocket';
 
   /// Общий JWT для подключения к mobile:lobby.
   /// Зашивается в приложение, одинаковый для всех пользователей.

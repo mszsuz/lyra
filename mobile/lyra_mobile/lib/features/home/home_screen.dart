@@ -44,6 +44,15 @@ class HomeScreen extends ConsumerWidget {
                   error: (_, __) => _buildEmptyState(),
                 ),
               ),
+              Center(
+                child: Text(
+                  'v0.2.0',
+                  style: TextStyle(
+                    color: LyraTheme.textSecondary.withValues(alpha: 0.5),
+                    fontSize: 11,
+                  ),
+                ),
+              ),
             ],
           ),
         ),

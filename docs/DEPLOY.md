@@ -379,6 +379,37 @@ journalctl -u lyra-router -f    # логи в реальном времени
 
 ---
 
+## Шаг 6.5. Firewall
+
+### Linux (ufw)
+
+```bash
+sudo ufw allow 443/tcp    # HTTPS (Caddy)
+sudo ufw allow 22/tcp     # SSH
+# Centrifugo (11911) НЕ открывать — трафик идёт через Caddy
+```
+
+### Windows (для локальной разработки)
+
+Мобильное подключается по Wi-Fi к IP компьютера (`192.168.x.x:11911`). Windows Firewall привязывает правила к пути exe — при смене папки нужно новое правило.
+
+```powershell
+# PowerShell от администратора
+$params = @{
+  DisplayName = "centrifugo-lyra"
+  Direction = "Inbound"
+  Action = "Allow"
+  Program = "C:\LYRA\centrifugo\centrifugo.exe"
+  Protocol = "TCP"
+  Profile = "Private,Public"
+}
+New-NetFirewallRule @params
+```
+
+Для TEST-LYRA (разработка) — аналогично с путём `C:\WORKS\...\TEST-LYRA\centrifugo\centrifugo.exe`.
+
+---
+
 ## Шаг 7. Проверка
 
 ### 1. Centrifugo работает

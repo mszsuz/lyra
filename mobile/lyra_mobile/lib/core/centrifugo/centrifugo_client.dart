@@ -55,25 +55,20 @@ class CentrifugoClient {
     _client!.connect();
 
     // Ждём подключения с таймаутом
-    await connectionState
-        .firstWhere((s) => s == CentrifugoConnectionState.connected)
-        .timeout(
-      const Duration(seconds: 10),
-      onTimeout: () {
-        disconnect();
-        throw TimeoutException(
-          'Не удалось подключиться к серверу. Проверьте сеть.',
-        );
-      },
-    );
-
-    // Подписка на mobile:lobby через channels claim в JWT.
-    // Мобильное публикует register/confirm в lobby,
-    // ответы (sms_sent, register_ack) тоже приходят в lobby.
+    try {
+      await connectionState
+          .firstWhere((s) => s == CentrifugoConnectionState.connected)
+          .timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      await disconnect();
+      throw TimeoutException(
+        'Не удалось подключиться к серверу. Проверьте сеть.',
+      );
+    }
   }
 
   /// Подключение с персональным JWT (авто-подписка через channels claim).
-  /// Throws [TimeoutException] если не удалось подключиться за 10 секунд.
+  /// Throws [TimeoutException] если не удалось подключиться за 15 секунд.
   Future<void> connectToSession(String mobileJwt) async {
     await disconnect();
 
@@ -89,21 +84,16 @@ class CentrifugoClient {
     _updateState(CentrifugoConnectionState.connecting);
     _client!.connect();
 
-    // Ждём подключения с таймаутом
-    await connectionState
-        .firstWhere((s) => s == CentrifugoConnectionState.connected)
-        .timeout(
-      const Duration(seconds: 10),
-      onTimeout: () {
-        disconnect();
-        throw TimeoutException(
-          'Не удалось подключиться к серверу. Проверьте сеть.',
-        );
-      },
-    );
-
-    // Авто-подписка через channels claim в JWT — подписка не нужна.
-    // Сообщения приходят через server-side subscriptions.
+    try {
+      await connectionState
+          .firstWhere((s) => s == CentrifugoConnectionState.connected)
+          .timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      await disconnect();
+      throw TimeoutException(
+        'Не удалось подключиться к серверу. Проверьте сеть.',
+      );
+    }
   }
 
   /// Публикация JSON в канал.
