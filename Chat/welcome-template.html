@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; font-family: 'Segoe UI', -apple-system, sans-serif; background: #1a2332; overflow: hidden; }
+body { display: flex; justify-content: center; align-items: center; }
+
+.card {
+  width: 720px;
+  height: 400px;
+  background: #f4f4f0;
+  border-radius: 16px;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  animation: cardIn 0.6s ease-out;
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: scale(0.95) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Pattern background */
+.card-body {
+  flex: 1;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+.pattern {
+  position: absolute;
+  inset: 0;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='280'%3E%3Ctext x='10' y='30' font-size='20'%3E%F0%9F%93%8A%3C/text%3E%3Ctext x='60' y='30' font-size='20'%3E%F0%9F%93%81%3C/text%3E%3Ctext x='110' y='30' font-size='20'%3E%F0%9F%94%8D%3C/text%3E%3Ctext x='160' y='30' font-size='20'%3E%F0%9F%92%AC%3C/text%3E%3Ctext x='210' y='30' font-size='20'%3E%F0%9F%93%88%3C/text%3E%3Ctext x='35' y='70' font-size='20'%3E%E2%9A%99%EF%B8%8F%3C/text%3E%3Ctext x='85' y='70' font-size='20'%3E%F0%9F%97%82%EF%B8%8F%3C/text%3E%3Ctext x='135' y='70' font-size='20'%3E%F0%9F%93%9D%3C/text%3E%3Ctext x='185' y='70' font-size='20'%3E%F0%9F%94%91%3C/text%3E%3Ctext x='235' y='70' font-size='20'%3E%F0%9F%93%A6%3C/text%3E%3Ctext x='10' y='110' font-size='20'%3E%F0%9F%96%A5%EF%B8%8F%3C/text%3E%3Ctext x='60' y='110' font-size='20'%3E%F0%9F%93%8B%3C/text%3E%3Ctext x='110' y='110' font-size='20'%3E%F0%9F%8F%A2%3C/text%3E%3Ctext x='160' y='110' font-size='20'%3E%F0%9F%92%B0%3C/text%3E%3Ctext x='210' y='110' font-size='20'%3E%F0%9F%93%8C%3C/text%3E%3Ctext x='35' y='150' font-size='20'%3E%F0%9F%93%B1%3C/text%3E%3Ctext x='85' y='150' font-size='20'%3E%F0%9F%97%83%EF%B8%8F%3C/text%3E%3Ctext x='135' y='150' font-size='20'%3E%F0%9F%94%A7%3C/text%3E%3Ctext x='185' y='150' font-size='20'%3E%F0%9F%93%90%3C/text%3E%3Ctext x='235' y='150' font-size='20'%3E%E2%9C%85%3C/text%3E%3C/svg%3E");
+  background-size: 280px;
+}
+
+/* Left content */
+.content {
+  flex: 1;
+  padding: 40px 32px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  z-index: 1;
+}
+
+.content .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #0a8f6c;
+  margin-bottom: 8px;
+  opacity: 0;
+  animation: textIn 0.5s ease-out 0.3s forwards;
+}
+
+.content h1 {
+  font-size: 22px;
+  font-weight: 600;
+  color: #2d3436;
+  line-height: 1.4;
+  margin-bottom: 14px;
+  opacity: 0;
+  animation: textIn 0.5s ease-out 0.4s forwards;
+}
+
+.content p {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #777;
+  max-width: 320px;
+  opacity: 0;
+  animation: textIn 0.5s ease-out 0.5s forwards;
+}
+
+@keyframes textIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Right — QR */
+.qr-side {
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1;
+  opacity: 0;
+  animation: textIn 0.5s ease-out 0.5s forwards;
+}
+
+.qr-box {
+  width: 160px;
+  height: 160px;
+  background: white;
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  margin-bottom: 12px;
+}
+
+.qr-box img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.qr-hint {
+  font-size: 11px;
+  color: #999;
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* Bottom bar */
+.bottom-bar {
+  height: 52px;
+  background: white;
+  border-top: 1px solid #e8e8e4;
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  justify-content: space-between;
+}
+
+.bottom-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bottom-logo {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #0a8f6c;
+}
+
+.bottom-ver {
+  font-size: 10px;
+  color: #bbb;
+  padding-top: 2px;
+}
+
+.bottom-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #bbb;
+}
+
+.pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f0ad4e;
+  animation: blink 1.5s ease-in-out infinite;
+}
+
+.pulse.connected {
+  background: #0a8f6c;
+  animation: none;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.install-link {
+  position: absolute;
+  bottom: 62px;
+  left: 28px;
+  font-size: 11px;
+  color: #aaa;
+  z-index: 2;
+  opacity: 0;
+  animation: textIn 0.5s ease-out 0.7s forwards;
+}
+
+.install-link a {
+  color: #0a8f6c;
+  text-decoration: none;
+}
+
+.install-link a:hover {
+  text-decoration: underline;
+}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-body">
+    <div class="pattern"></div>
+
+    <div class="content">
+      <div class="label">ИИ-ассистент для 1С</div>
+      <h1>Задавайте вопросы —<br>Лира найдёт ответ<br>в вашей базе</h1>
+      <p>Данные, отчёты, документация, диагностика ошибок — всё через обычный чат.</p>
+    </div>
+
+    <div class="qr-side">
+      <div class="qr-box" id="session-qr">
+        <img src="data:image/png;base64,{{QR_BASE64}}" alt="QR">
+      </div>
+      <div class="qr-hint">Отсканируйте<br>в приложении Лира</div>
+    </div>
+
+    <div class="install-link">
+      Нет приложения? <a href="https://lyra.1ext.com/download">Скачать</a>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="bottom-left">
+      <span class="bottom-logo">ЛИРА</span>
+      <span class="bottom-ver">{{VERSION}}</span>
+    </div>
+    <div class="bottom-right">
+      <span class="pulse" id="status-dot"></span>
+      <span id="status-text">Ожидание подключения</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -45,6 +45,18 @@ class AuthMessage extends OutgoingMessage {
       };
 }
 
+class GetSessionsMessage extends OutgoingMessage {
+  final String userId;
+
+  GetSessionsMessage({required this.userId});
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': 'get_sessions',
+        'user_id': userId,
+      };
+}
+
 /// Типы входящих сообщений.
 sealed class IncomingMessage {
   factory IncomingMessage.fromJson(Map<String, dynamic> json) {
@@ -58,6 +70,7 @@ sealed class IncomingMessage {
       'auth_ack' => AuthAckMessage.fromJson(json),
       'balance_update' => BalanceUpdateMessage.fromJson(json),
       'sessions_list' => SessionsListMessage(
+        userId: json['user_id'] as String?,
         sessions: List<Map<String, dynamic>>.from(json['sessions'] ?? []),
       ),
       _ => UnknownMessage(type: type, data: json),
@@ -143,13 +156,28 @@ class HelloAckMessage implements IncomingMessage {
 class AuthAckMessage implements IncomingMessage {
   final String sessionId;
   final String status;
+  final String? configName;
+  final String? created;
+  final double? balance;
+  final String? currency;
 
-  AuthAckMessage({required this.sessionId, required this.status});
+  AuthAckMessage({
+    required this.sessionId,
+    required this.status,
+    this.configName,
+    this.created,
+    this.balance,
+    this.currency,
+  });
 
   factory AuthAckMessage.fromJson(Map<String, dynamic> json) =>
       AuthAckMessage(
         sessionId: json['session_id'] as String,
         status: json['status'] as String,
+        configName: json['config_name'] as String?,
+        created: json['created'] as String?,
+        balance: (json['balance'] as num?)?.toDouble(),
+        currency: json['currency'] as String?,
       );
 }
 
@@ -173,8 +201,9 @@ class BalanceUpdateMessage implements IncomingMessage {
 }
 
 class SessionsListMessage implements IncomingMessage {
+  final String? userId;
   final List<Map<String, dynamic>> sessions;
-  SessionsListMessage({required this.sessions});
+  SessionsListMessage({this.userId, required this.sessions});
 }
 
 class UnknownMessage implements IncomingMessage {

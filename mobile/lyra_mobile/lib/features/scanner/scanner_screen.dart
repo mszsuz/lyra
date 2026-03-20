@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../app/theme.dart';
+import '../../core/storage/secure_storage.dart';
 import 'scanner_provider.dart';
 
 class ScannerScreen extends ConsumerStatefulWidget {
@@ -252,8 +253,46 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
             ),
             textAlign: TextAlign.center,
           ),
+          const SizedBox(height: 16),
+          _buildAutoScanToggle(),
         ],
       ),
+    );
+  }
+
+  Widget _buildAutoScanToggle() {
+    return FutureBuilder<bool>(
+      future: ref.read(secureStorageProvider).getAutoScanner(),
+      builder: (context, snapshot) {
+        final isOn = snapshot.data ?? false;
+        return GestureDetector(
+          onTap: () {
+            final storage = ref.read(secureStorageProvider);
+            storage.setAutoScanner(!isOn);
+            setState(() {});
+          },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isOn ? Icons.check_box : Icons.check_box_outline_blank,
+                size: 18,
+                color: isOn
+                    ? LyraTheme.accent
+                    : Colors.white.withValues(alpha: 0.4),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Открывать при запуске',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withValues(alpha: 0.4),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

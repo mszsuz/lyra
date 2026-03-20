@@ -143,17 +143,38 @@ class ScannerNotifier extends StateNotifier<ScannerState> {
     }
   }
 
-  void _onMessage(IncomingMessage message) {
+  void _onMessage(IncomingMessage message) async {
     switch (message) {
-      case AuthAckMessage(:final sessionId, :final status):
+      case AuthAckMessage(
+            :final sessionId,
+            :final status,
+            :final configName,
+            :final created,
+            :final balance,
+            :final currency,
+          ):
         if (status == 'ok') {
+          // Save balance as user-level field, not per-session
+          if (balance != null) _storage.saveBalance(balance);
+
+          // Remove old sessions to the same database
+          final cn = configName ?? '';
+          if (cn.isNotEmpty) {
+            final old = await _storage.getSessions();
+            for (final s in old.where((s) => s.configName == cn)) {
+              await _storage.removeSession(s.sessionId);
+            }
+          }
+
           final session = SessionInfo(
             sessionId: sessionId,
             channel: 'session:$sessionId',
             mobileJwt: _currentMobileJwt,
+            configName: cn,
             status: 'connected',
+            created: created ?? DateTime.now().toIso8601String(),
           );
-          _storage.saveSession(session);
+          await _storage.saveSession(session);
           state = state.copyWith(
             step: ScannerStep.done,
             session: session,
@@ -170,10 +191,11 @@ class ScannerNotifier extends StateNotifier<ScannerState> {
           :final balance,
           :final currency,
         ):
+        // Save balance as user-level field
+        _storage.saveBalance(balance);
         if (state.session != null &&
             state.session!.sessionId == sessionId) {
           final updated = state.session!.copyWith(
-            balance: balance,
             currency: currency,
           );
           _storage.saveSession(updated);

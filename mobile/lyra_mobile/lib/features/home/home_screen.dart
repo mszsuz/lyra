@@ -5,19 +5,60 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../core/storage/secure_storage.dart';
 import '../../models/session_info.dart';
+import 'home_provider.dart';
 
-// Provider to load sessions from storage
-final sessionsProvider = FutureProvider<List<SessionInfo>>((ref) async {
+// Provider for user balance
+final balanceProvider = FutureProvider<double>((ref) async {
   final storage = ref.watch(secureStorageProvider);
-  return storage.getSessions();
+  return storage.getBalance();
 });
 
-class HomeScreen extends ConsumerWidget {
+// Provider for auto-scanner setting
+final autoScannerProvider = FutureProvider<bool>((ref) async {
+  final storage = ref.watch(secureStorageProvider);
+  return storage.getAutoScanner();
+});
+
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sessionsAsync = ref.watch(sessionsProvider);
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  bool _autoScanChecked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Load sessions from Router
+      ref.read(homeProvider.notifier).loadSessions();
+
+      // Auto-open scanner if enabled and balance > 0
+      ref.read(autoScannerProvider.future).then((auto) async {
+        if (!auto || !mounted) return;
+        final balance = await ref.read(balanceProvider.future);
+        if (balance > 0 && mounted) {
+          context.go('/scanner');
+        }
+      });
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh sessions when returning to this screen
+    ref.read(homeProvider.notifier).loadSessions();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.invalidate(balanceProvider);
+    final homeState = ref.watch(homeProvider);
+    final balance = ref.watch(balanceProvider).valueOrNull ?? 0.0;
 
     return Scaffold(
       body: SafeArea(
@@ -26,27 +67,24 @@ class HomeScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildAppBar(context, ref),
+              _buildAppBar(context),
               const SizedBox(height: 20),
-              _buildBalanceCard(context, sessionsAsync),
+              _buildBalanceCardSimple(context, balance),
               const SizedBox(height: 20),
               _buildScanButton(context),
               const SizedBox(height: 24),
-              _buildSectionTitle('АКТИВНЫЕ СЕССИИ'),
+              _buildSectionTitle('АКТИВНЫЕ ПОДКЛЮЧЕНИЯ'),
               const SizedBox(height: 12),
               Expanded(
-                child: sessionsAsync.when(
-                  data: (sessions) => sessions.isEmpty
-                      ? _buildEmptyState()
-                      : _buildSessionsList(context, sessions),
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (_, __) => _buildEmptyState(),
-                ),
+                child: homeState.loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : homeState.sessions.isEmpty
+                        ? _buildEmptyState()
+                        : _buildSessionsList(context, homeState.sessions),
               ),
               Center(
                 child: Text(
-                  'v0.2.0',
+                  'v0.3.1',
                   style: TextStyle(
                     color: LyraTheme.textSecondary.withValues(alpha: 0.5),
                     fontSize: 11,
@@ -60,7 +98,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildAppBar(BuildContext context, WidgetRef ref) {
+  Widget _buildAppBar(BuildContext context) {
     return Row(
       children: [
         const Text(
@@ -80,7 +118,7 @@ class HomeScreen extends ConsumerWidget {
         const SizedBox(width: 8),
         _buildIconButton(
           icon: Icons.close,
-          onTap: () => _showLogoutDialog(context, ref),
+          onTap: () => _showLogoutDialog(context),
         ),
       ],
     );
@@ -105,18 +143,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBalanceCard(
-      BuildContext context, AsyncValue<List<SessionInfo>> sessionsAsync) {
-    // Calculate total balance from sessions
-    final balance = sessionsAsync.whenOrNull(
-          data: (sessions) => sessions.fold<double>(
-            0,
-            (sum, s) => sum + s.balance,
-          ),
-        ) ??
-        0.0;
-
-    // Format balance: "1 250,00"
+  Widget _buildBalanceCardSimple(BuildContext context, double balance) {
     final balanceStr = _formatBalance(balance);
 
     return Container(
@@ -229,12 +256,44 @@ class HomeScreen extends ConsumerWidget {
             Icon(Icons.camera_alt, color: Colors.white, size: 22),
             SizedBox(width: 10),
             Text(
-              'СКАНИРОВАТЬ QR',
+              'ПОДКЛЮЧИТЬСЯ К 1С',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAutoScanCheckbox(AsyncValue<bool> autoScanAsync) {
+    final isOn = autoScanAsync.valueOrNull ?? false;
+    return GestureDetector(
+      onTap: () {
+        final storage = ref.read(secureStorageProvider);
+        storage.setAutoScanner(!isOn);
+        ref.invalidate(autoScannerProvider);
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isOn ? Icons.check_box : Icons.check_box_outline_blank,
+              size: 18,
+              color: isOn ? LyraTheme.accent : LyraTheme.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Открывать при запуске',
+              style: TextStyle(
+                fontSize: 12,
+                color: LyraTheme.textSecondary,
               ),
             ),
           ],
@@ -303,7 +362,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _showLogoutDialog(BuildContext context, WidgetRef ref) async {
+  Future<void> _showLogoutDialog(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -331,6 +390,19 @@ class HomeScreen extends ConsumerWidget {
       }
     }
   }
+}
+
+String _formatSessionTime(String? isoDate) {
+  if (isoDate == null) return '';
+  final dt = DateTime.tryParse(isoDate)?.toLocal();
+  if (dt == null) return '';
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final sessionDay = DateTime(dt.year, dt.month, dt.day);
+  final time = '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+  if (sessionDay == today) return 'Сегодня, $time';
+  if (sessionDay == today.subtract(const Duration(days: 1))) return 'Вчера, $time';
+  return '${dt.day}.${dt.month.toString().padLeft(2, '0')}.${dt.year}, $time';
 }
 
 class _SessionCard extends StatelessWidget {
@@ -398,12 +470,19 @@ class _SessionCard extends StatelessWidget {
                           color: LyraTheme.textPrimary,
                         ),
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _formatSessionTime(session.created),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: LyraTheme.textSecondary,
+                        ),
+                      ),
                       if (statusText != null) ...[
-                        const SizedBox(height: 2),
                         Text(
                           statusText,
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             color: iconColor,
                           ),
                         ),

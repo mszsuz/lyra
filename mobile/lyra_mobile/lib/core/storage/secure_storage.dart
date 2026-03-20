@@ -94,6 +94,31 @@ class SecureStorage {
     await _storage.write(key: _keyUserRole, value: role);
   }
 
+  static const _keyBalance = 'lyra_balance';
+  static const _keyAutoScanner = 'lyra_auto_scanner';
+
+  Future<double> getBalance() async {
+    final val = await _storage.read(key: _keyBalance);
+    return val != null ? double.tryParse(val) ?? 0 : 0;
+  }
+
+  Future<void> saveBalance(double balance) async {
+    await _storage.write(key: _keyBalance, value: balance.toString());
+  }
+
+  Future<bool> getAutoScanner() async {
+    final val = await _storage.read(key: _keyAutoScanner);
+    return val == 'true';
+  }
+
+  Future<void> setAutoScanner(bool value) async {
+    await _storage.write(key: _keyAutoScanner, value: value.toString());
+  }
+
+  Future<void> clearSessions() async {
+    await _storage.write(key: _keySessions, value: '[]');
+  }
+
   Future<void> clearAll() async {
     await _storage.deleteAll();
   }

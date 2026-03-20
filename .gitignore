@@ -34,5 +34,9 @@ Router/router.pid
 # Рабочий каталог (dataDir)
 TEST-LYRA/
 
+# Архив и временные файлы
+_LEGASY/
+TEMP/
+
 # Vega — отдельный git-репозиторий (github.com/mszsuz/Vega)
 Vega/
