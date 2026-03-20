@@ -147,7 +147,7 @@ openssl rand -base64 64 | tr -d '\n'   # http_api key
     "hmac_secret_key": "<НОВЫЙ_КЛЮЧ>"
   },
   "http_server": {
-    "port": "11000"
+    "port": "11911"
   },
   "allowed_origins": ["https://your-domain.com"],
   "admin": {
@@ -222,8 +222,8 @@ cp "$SRC/profiles/default/"* "$DST/profiles/default/"
 ```json
 {
   "centrifugo": {
-    "wsUrl": "ws://localhost:11000/connection/websocket",
-    "apiUrl": "http://localhost:11000/api",
+    "wsUrl": "ws://localhost:11911/connection/websocket",
+    "apiUrl": "http://localhost:11911/api",
     "hmacSecret": "<тот же hmac_secret_key из centrifugo/config.json>",
     "apiKey": "<тот же http_api.key из centrifugo/config.json>"
   },
@@ -304,7 +304,7 @@ node -e "
 lyra.your-domain.com {
     # Centrifugo WebSocket
     handle /connection/* {
-        reverse_proxy localhost:11000
+        reverse_proxy localhost:11911
     }
 
     # Centrifugo API (только с localhost, не пробрасывать наружу)
@@ -384,7 +384,7 @@ journalctl -u lyra-router -f    # логи в реальном времени
 ### 1. Centrifugo работает
 
 ```bash
-curl http://localhost:11000/health
+curl http://localhost:11911/health
 # {"status":"ok"}
 ```
 
