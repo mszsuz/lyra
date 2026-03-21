@@ -1,0 +1,265 @@
+// OpenAI-compatible adapter — works with any provider that implements OpenAI API
+// OpenRouter, Gemini, GPT, Ollama, cli-proxy-api, etc.
+
+export class OpenAiAdapter {
+  #apiKey;
+  #baseUrl;
+  #model;
+
+  async init(config) {
+    this.#apiKey = config.api_key || '';
+    this.#baseUrl = (config.base_url || 'https://api.openai.com/v1').replace(/\/+$/, '');
+    this.#model = config.model || 'gpt-4o';
+
+    return {
+      streaming: true,
+      tool_calls: true,
+      vision: true,
+      thinking: false,
+      max_context_tokens: 128000,
+      max_output_tokens: 16384,
+    };
+  }
+
+  async *chat(request) {
+    const body = this.#buildRequestBody(request);
+    const url = `${this.#baseUrl}/chat/completions`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${request.api_key || this.#apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      yield { type: 'error', message: `API error ${res.status}: ${errorText}`, code: 'api_error', retryable: res.status >= 500 };
+      return;
+    }
+
+    if (body.stream) {
+      yield* this.#parseSSE(res.body);
+    } else {
+      const data = await res.json();
+      yield* this.#parseNonStream(data);
+    }
+  }
+
+  async abort(sessionId) {
+    return { ok: true };
+  }
+
+  #buildRequestBody(request) {
+    const body = {
+      model: request.options?.model || this.#model,
+      stream: true,
+      max_tokens: request.options?.max_tokens || 16384,
+    };
+
+    // Messages
+    body.messages = [];
+
+    // System prompt as first message
+    if (request.system_prompt) {
+      body.messages.push({ role: 'system', content: request.system_prompt });
+    }
+
+    // Conversation messages
+    for (const msg of request.messages) {
+      body.messages.push(this.#convertMessage(msg));
+    }
+
+    // Tools
+    if (request.tools?.length) {
+      body.tools = request.tools.map(t => ({
+        type: 'function',
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.input_schema || {},
+        },
+      }));
+    }
+
+    return body;
+  }
+
+  #convertMessage(msg) {
+    if (msg.role === 'tool_result') {
+      return {
+        role: 'tool',
+        tool_call_id: msg.tool_use_id,
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+      };
+    }
+
+    const result = { role: msg.role };
+
+    // Multimodal
+    if (msg.attachments?.length) {
+      result.content = [];
+      for (const att of msg.attachments) {
+        if (att.kind === 'image') {
+          result.content.push({
+            type: 'image_url',
+            image_url: { url: `data:${att.media_type};base64,${att.data}` },
+          });
+        }
+      }
+      if (msg.content) {
+        result.content.push({
+          type: 'text',
+          text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+        });
+      }
+    } else {
+      result.content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+    }
+
+    // Assistant with tool calls
+    if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+      const toolUses = msg.content.filter(c => c.type === 'tool_use');
+      if (toolUses.length) {
+        result.content = msg.content.filter(c => c.type === 'text').map(c => c.text).join('') || null;
+        result.tool_calls = toolUses.map(t => ({
+          id: t.id,
+          type: 'function',
+          function: { name: t.name, arguments: JSON.stringify(t.input) },
+        }));
+      }
+    }
+
+    return result;
+  }
+
+  async *#parseSSE(body) {
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullText = '';
+    let toolCalls = new Map(); // id → {name, arguments}
+    let model = this.#model;
+    let usage = null;
+
+    for await (const chunk of body) {
+      buffer += decoder.decode(chunk, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+
+        let event;
+        try {
+          event = JSON.parse(data);
+        } catch {
+          continue;
+        }
+
+        const choice = event.choices?.[0];
+        if (!choice) continue;
+
+        model = event.model || model;
+        if (event.usage) usage = event.usage;
+
+        const delta = choice.delta;
+        if (delta?.content) {
+          fullText += delta.content;
+          yield { type: 'text_delta', text: delta.content };
+        }
+
+        // Reasoning/thinking (some models)
+        if (delta?.reasoning_content) {
+          yield { type: 'thinking_delta', text: delta.reasoning_content };
+        }
+
+        // Tool calls
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const idx = tc.index ?? 0;
+            if (!toolCalls.has(idx)) {
+              toolCalls.set(idx, { id: tc.id || '', name: '', arguments: '' });
+            }
+            const existing = toolCalls.get(idx);
+            if (tc.id) existing.id = tc.id;
+            if (tc.function?.name) existing.name = tc.function.name;
+            if (tc.function?.arguments) existing.arguments += tc.function.arguments;
+          }
+        }
+
+        // Finish
+        if (choice.finish_reason) {
+          // Emit accumulated tool calls
+          if (choice.finish_reason === 'tool_calls' || toolCalls.size > 0) {
+            for (const [, tc] of toolCalls) {
+              let input = {};
+              try { input = JSON.parse(tc.arguments); } catch {}
+              yield { type: 'tool_use', id: tc.id, name: tc.name, input };
+            }
+            toolCalls.clear();
+          }
+
+          // assistant_end
+          if (choice.finish_reason === 'stop' || choice.finish_reason === 'end_turn') {
+            yield {
+              type: 'assistant_end',
+              text: fullText,
+              usage: {
+                input_tokens: usage?.prompt_tokens || 0,
+                output_tokens: usage?.completion_tokens || 0,
+                cache_read_tokens: 0,
+                cache_write_tokens: 0,
+              },
+              cost_usd: null, // OpenAI-compatible APIs rarely provide cost
+              model,
+              stop_reason: choice.finish_reason,
+            };
+          }
+        }
+      }
+    }
+
+    // If stream ended without explicit finish — emit assistant_end
+    // (skip if already emitted inside the loop)
+    // handled inside the loop via finish_reason check
+  }
+
+  async *#parseNonStream(data) {
+    const choice = data.choices?.[0];
+    if (!choice) {
+      yield { type: 'error', message: 'No choices in response', code: 'empty_response', retryable: false };
+      return;
+    }
+
+    const text = choice.message?.content || '';
+    yield { type: 'text_delta', text };
+
+    // Tool calls
+    if (choice.message?.tool_calls) {
+      for (const tc of choice.message.tool_calls) {
+        let input = {};
+        try { input = JSON.parse(tc.function?.arguments || '{}'); } catch {}
+        yield { type: 'tool_use', id: tc.id, name: tc.function?.name, input };
+      }
+    }
+
+    yield {
+      type: 'assistant_end',
+      text,
+      usage: {
+        input_tokens: data.usage?.prompt_tokens || 0,
+        output_tokens: data.usage?.completion_tokens || 0,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+      },
+      cost_usd: null,
+      model: data.model || this.#model,
+      stop_reason: choice.finish_reason || 'stop',
+    };
+  }
+}
