@@ -56,6 +56,7 @@ export class OpenAiAdapter {
     const body = {
       model: request.options?.model || this.#model,
       stream: true,
+      stream_options: { include_usage: true },
       max_tokens: request.options?.max_tokens || 16384,
     };
 
@@ -142,6 +143,7 @@ export class OpenAiAdapter {
     let toolCalls = new Map(); // id → {name, arguments}
     let model = this.#model;
     let usage = null;
+    let cost = null;
 
     for await (const chunk of body) {
       buffer += decoder.decode(chunk, { stream: true });
@@ -165,7 +167,10 @@ export class OpenAiAdapter {
         if (!choice) continue;
 
         model = event.model || model;
-        if (event.usage) usage = event.usage;
+        if (event.usage) {
+          usage = event.usage;
+          if (event.usage.cost !== undefined) cost = event.usage.cost;
+        }
 
         const delta = choice.delta;
         if (delta?.content) {
@@ -212,10 +217,10 @@ export class OpenAiAdapter {
               usage: {
                 input_tokens: usage?.prompt_tokens || 0,
                 output_tokens: usage?.completion_tokens || 0,
-                cache_read_tokens: 0,
-                cache_write_tokens: 0,
+                cache_read_tokens: usage?.prompt_tokens_details?.cached_tokens || 0,
+                cache_write_tokens: usage?.prompt_tokens_details?.cache_write_tokens || 0,
               },
-              cost_usd: null, // OpenAI-compatible APIs rarely provide cost
+              cost_usd: cost,
               model,
               stop_reason: choice.finish_reason,
             };

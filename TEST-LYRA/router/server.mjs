@@ -600,21 +600,23 @@ setInterval(() => {
 async function startAdapterSession(session, adapterName) {
   profile = loadProfile(config.profilePath);
 
-  const adapterConfig = {
-    api_key: config.adapters?.[adapterName]?.api_key || process.env.ANTHROPIC_API_KEY || '',
-    model: config.claude?.model || 'claude-sonnet-4-6',
-  };
-
-  // User can override api_key
+  // Read adapter config from user profile or router config
   const userConfig = getUserConfig(session.userId, session.baseIds);
-  if (userConfig.api_key) adapterConfig.api_key = userConfig.api_key;
+  const userAdapterConfig = userConfig.adapterConfig || {};
+  const routerAdapterConfig = config.adapters?.[adapterName] || {};
+
+  const adapterConfig = {
+    base_url: userAdapterConfig.base_url || routerAdapterConfig.base_url || '',
+    api_key: userAdapterConfig.api_key || routerAdapterConfig.api_key || process.env.ANTHROPIC_API_KEY || '',
+    model: userAdapterConfig.model || routerAdapterConfig.model || config.claude?.model || 'claude-sonnet-4-6',
+  };
 
   const { adapter, capabilities } = await createAdapter(adapterName, adapterConfig);
   session.adapter = adapter;
   session.adapterCapabilities = capabilities;
-  session.messages = []; // conversation history
+  session.messages = [];
 
-  log.info(TAG, `Adapter "${adapterName}" started for session ${session.sessionId} (caps: ${JSON.stringify(capabilities)})`);
+  log.info(TAG, `Adapter "${adapterName}" started for session ${session.sessionId} (model: ${adapterConfig.model}, caps: ${JSON.stringify(capabilities)})`);
 }
 
 async function runAdapterChat(session, text) {
@@ -640,35 +642,50 @@ async function runAdapterChat(session, text) {
     system_prompt: systemPrompt,
     messages: session.messages,
     tools,
-    options: { model: config.claude?.model },
+    options: {},  // model already set in adapter.init()
   };
 
   try {
-    for await (const event of session.adapter.chat(request)) {
-      handleAdapterEvent(session, event);
+    let maxTurns = 10; // prevent infinite loops
+    while (maxTurns-- > 0) {
+      const currentRequest = { ...request, messages: [...session.messages] };
+      let hadToolUse = false;
 
-      // Tool use — execute and continue
-      if (event.type === 'tool_use') {
-        const toolResult = await executeToolCall(session, event);
-        session.messages.push({
-          role: 'assistant',
-          content: [{ type: 'tool_use', id: event.id, name: event.name, input: event.input }],
-        });
-        session.messages.push({
-          role: 'tool_result',
-          tool_use_id: event.id,
-          content: JSON.stringify(toolResult),
-        });
-        // Continue chat with tool result
-        const request2 = { ...request, messages: session.messages };
-        for await (const event2 of session.adapter.chat(request2)) {
-          handleAdapterEvent(session, event2);
+      for await (const event of session.adapter.chat(currentRequest)) {
+        handleAdapterEvent(session, event);
+
+        if (event.type === 'tool_use') {
+          hadToolUse = true;
+          log.info(TAG, `Tool use from adapter: ${event.name}`);
+          // Show progress in Chat UI
+          const toolLabel = profile.toolLabels?.[`mcp__1c__${event.name}`] || event.name;
+          centrifugo.apiPublish(session.channel, {
+            type: 'tool_status', tool: `mcp__1c__${event.name}`, description: toolLabel,
+          }).catch(() => {});
+          const toolResult = await executeToolCall(session, event);
+          session.messages.push({
+            role: 'assistant',
+            content: [{ type: 'tool_use', id: event.id, name: event.name, input: event.input }],
+          });
+          session.messages.push({
+            role: 'tool_result',
+            tool_use_id: event.id,
+            content: JSON.stringify(toolResult),
+          });
+          log.info(TAG, `Tool result received, continuing with model...`);
+          break; // break inner loop, continue outer while
         }
-        break;
+
+        if (event.type === 'assistant_end') {
+          hadToolUse = false; // done
+          break;
+        }
       }
+
+      if (!hadToolUse) break; // No more tool calls — done
     }
   } catch (err) {
-    log.error(TAG, `Adapter error: ${err.message}`);
+    log.error(TAG, `Adapter error: ${err.message} ${err.stack || ''}`);
     centrifugo.apiPublish(session.channel, { type: 'error', message: 'Ошибка модели' });
   }
 
@@ -732,8 +749,25 @@ function handleAdapterEvent(session, event) {
 }
 
 async function executeToolCall(session, toolUse) {
-  // Publish tool_call to Chat via Centrifugo, wait for tool_result
   log.info(TAG, `🔧 Tool call: ${toolUse.name} (session ${session.sessionId})`);
+
+  // Memory tools — execute locally (no Centrifugo needed)
+  if (toolUse.name.startsWith('lyra_memory_')) {
+    try {
+      const { handleMemoryTool } = await import('./memory.mjs');
+      const result = handleMemoryTool(toolUse.name, toolUse.input, {
+        configName: session.configName,
+        userId: session.userId,
+        dbId: session.dbId,
+        dbName: session.dbName,
+      });
+      return { result };
+    } catch (err) {
+      return { error: err.message };
+    }
+  }
+
+  // Client tools — via Centrifugo → Chat 1С
 
   const requestId = randomUUID();
   centrifugo.apiPublish(session.channel, {

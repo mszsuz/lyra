@@ -178,6 +178,8 @@ export function getUserConfig(userId, baseIds) {
     naparnikToken: profile.naparnik_token || '',
     userName: profile.user_name || '',
     userLevel: profile.user_level || '',
+    adapter: profile.adapter || '',
+    adapterConfig: profile.adapter_config || {},
   };
 
   // Find database in registry by base_ids
