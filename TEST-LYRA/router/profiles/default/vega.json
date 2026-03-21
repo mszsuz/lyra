@@ -1,0 +1,21 @@
+{
+  "type": "http",
+  "headers": {
+    "X-API-Key": "vega"
+  },
+  "allowedTools": [
+    "mcp__vega__search_metadata",
+    "mcp__vega__search_metadata_by_description",
+    "mcp__vega__search_code"
+  ],
+  "configs": {
+    "БухгалтерияПредприятия":          {"port": 60010},
+    "ЗарплатаИУправлениеПерсоналом":   {"port": 60030},
+    "УправлениеТорговлей":             {"port": 60050},
+    "УправлениеПредприятием":          {"port": 60060},
+    "РозничнаяТорговля":               {"port": 60040},
+    "Демонстрационная":                {"port": 60020},
+    "УправлениеНебольшойФирмой":       {"port": 60020},
+    "EXT_ServicesDB":                  {"port": 60020}
+  }
+}

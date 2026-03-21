@@ -1,0 +1,20 @@
+{
+  "centrifugo": {
+    "wsUrl": "ws://localhost:11911/connection/websocket",
+    "apiUrl": "http://localhost:11911/api"
+  },
+  "claude": {
+    "path": "claude",
+    "model": "sonnet"
+  },
+  "toolCallTimeout": {
+    "default": 30000,
+    "lyra_ask_naparnik": 300000
+  },
+  "toolsPort": 0,
+  "profilePath": "./profiles/default",
+  "logLevel": "debug",
+  "sessionTTL": 14400000,
+  "sessionWarningBefore": 300000,
+  "dataDir": ".."
+}

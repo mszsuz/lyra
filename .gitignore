@@ -31,8 +31,12 @@ Router/users/
 Router/var/
 Router/router.pid
 
-# Рабочий каталог (dataDir)
-TEST-LYRA/
+# TEST-LYRA — данные (код под git)
+TEST-LYRA/users/
+TEST-LYRA/var/
+TEST-LYRA/memory/
+TEST-LYRA/centrifugo/centrifugo.exe
+TEST-LYRA/router/router.pid
 
 # Архив и временные файлы
 _LEGASY/
