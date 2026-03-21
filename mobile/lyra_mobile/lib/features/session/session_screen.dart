@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../../app/theme.dart';
 import '../../core/centrifugo/centrifugo_client.dart';
@@ -16,6 +17,10 @@ class SessionScreen extends ConsumerStatefulWidget {
 }
 
 class _SessionScreenState extends ConsumerState<SessionScreen> {
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _isListening = false;
+  String _recognizedText = '';
+
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider(widget.sessionId));
@@ -347,21 +352,112 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
   // ── Input panel ───────────────────────────────────────────────────────
 
   Widget _buildInputPanel(bool isActive) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Column(
       children: [
-        _buildMediaButton(
-          icon: Icons.mic,
-          enabled: isActive,
-          onTap: () => _showInDevelopment(context),
-        ),
-        const SizedBox(width: 12),
-        _buildMediaButton(
-          icon: Icons.camera_alt,
-          enabled: isActive,
-          onTap: () => _showInDevelopment(context),
+        // Recognized text preview
+        if (_recognizedText.isNotEmpty)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: LyraTheme.bgAlt,
+              borderRadius: BorderRadius.circular(LyraTheme.radiusSm),
+              border: Border.all(color: LyraTheme.divider),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _recognizedText,
+                  style: const TextStyle(fontSize: 14, color: LyraTheme.textPrimary),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    GestureDetector(
+                      onTap: () => setState(() => _recognizedText = ''),
+                      child: Text('Очистить',
+                          style: TextStyle(fontSize: 12, color: LyraTheme.textSecondary)),
+                    ),
+                    const SizedBox(width: 16),
+                    GestureDetector(
+                      onTap: () {
+                        ref.read(sessionProvider(widget.sessionId).notifier)
+                            .sendVoiceText(_recognizedText);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Отправлено в чат')),
+                        );
+                        setState(() => _recognizedText = '');
+                      },
+                      child: Text('Отправить в чат',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: LyraTheme.accent,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        // Buttons
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildMediaButton(
+              icon: _isListening ? Icons.mic : Icons.mic_none,
+              enabled: isActive,
+              highlighted: _isListening,
+              onTap: () => _toggleListening(),
+            ),
+            const SizedBox(width: 12),
+            _buildMediaButton(
+              icon: Icons.camera_alt,
+              enabled: isActive,
+              onTap: () => _showInDevelopment(context),
+            ),
+          ],
         ),
       ],
+    );
+  }
+
+  Future<void> _toggleListening() async {
+    if (_isListening) {
+      await _speech.stop();
+      setState(() => _isListening = false);
+      return;
+    }
+
+    final available = await _speech.initialize(
+      onError: (error) {
+        setState(() => _isListening = false);
+      },
+    );
+
+    if (!available) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Распознавание речи недоступно')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isListening = true);
+
+    await _speech.listen(
+      localeId: 'ru_RU',
+      onResult: (result) {
+        setState(() {
+          _recognizedText = result.recognizedWords;
+        });
+        if (result.finalResult) {
+          setState(() => _isListening = false);
+        }
+      },
     );
   }
 
@@ -369,6 +465,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     required IconData icon,
     required bool enabled,
     required VoidCallback onTap,
+    bool highlighted = false,
   }) {
     return GestureDetector(
       onTap: enabled ? onTap : null,
@@ -378,7 +475,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
           width: 60,
           height: 60,
           decoration: BoxDecoration(
-            color: enabled ? LyraTheme.accentBg : LyraTheme.bgAlt,
+            color: highlighted ? LyraTheme.accent : (enabled ? LyraTheme.accentBg : LyraTheme.bgAlt),
             borderRadius: BorderRadius.circular(LyraTheme.radius),
             border: Border.all(
               color: enabled ? LyraTheme.accent : LyraTheme.divider,
@@ -388,7 +485,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
           child: Icon(
             icon,
             size: 24,
-            color: enabled ? LyraTheme.accent : LyraTheme.textMuted,
+            color: highlighted ? Colors.white : (enabled ? LyraTheme.accent : LyraTheme.textMuted),
           ),
         ),
       ),

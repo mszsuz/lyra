@@ -1,7 +1,7 @@
 name: lyra_mobile
 description: Lyra — мобильное приложение для 1С:Предприятие
 publish_to: 'none'
-version: 0.3.1+8
+version: 0.4.0+9
 
 environment:
   sdk: ^3.5.0
@@ -15,6 +15,7 @@ dependencies:
   flutter_riverpod: ^2.4.0
   uuid: ^4.0.0
   go_router: ^14.0.0
+  speech_to_text: ^7.0.0
 
 dev_dependencies:
   flutter_test:

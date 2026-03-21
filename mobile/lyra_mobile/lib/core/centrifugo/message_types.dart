@@ -45,6 +45,24 @@ class AuthMessage extends OutgoingMessage {
       };
 }
 
+class MobileMessage extends OutgoingMessage {
+  final List<Map<String, dynamic>> parts;
+
+  MobileMessage({required this.parts});
+
+  factory MobileMessage.text(String text) =>
+      MobileMessage(parts: [{'kind': 'text', 'text': text}]);
+
+  factory MobileMessage.photo(String base64data, String name) =>
+      MobileMessage(parts: [{'kind': 'photo', 'data': base64data, 'name': name}]);
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': 'mobile',
+        'parts': parts,
+      };
+}
+
 class GetSessionsMessage extends OutgoingMessage {
   final String userId;
 

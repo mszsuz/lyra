@@ -61,6 +61,14 @@ class SessionNotifier extends StateNotifier<SessionInfo?> {
     }
   }
 
+  Future<void> sendVoiceText(String text) async {
+    if (state == null) return;
+    await _centrifugo.publish(
+      state!.channel,
+      MobileMessage.text(text),
+    );
+  }
+
   Future<void> disconnect() async {
     await _centrifugo.disconnect();
     if (state != null) {
