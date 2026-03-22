@@ -180,7 +180,7 @@ export class CodexCliAdapter {
   #calculateCost(inputTokens, outputTokens, cachedTokens) {
     // OpenAI pricing per million tokens (as of 2026)
     const pricing = {
-      'gpt-5.4':      { input: 2.50, output: 10.00, cached: 1.25 },
+      'gpt-5.4':      { input: 2.50, output: 15.00, cached: 1.25 },
       'gpt-5.4-mini': { input: 0.40, output: 1.60, cached: 0.20 },
       'gpt-5.4-pro':  { input: 10.00, output: 40.00, cached: 5.00 },
       'gpt-5.3':      { input: 2.00, output: 8.00, cached: 1.00 },

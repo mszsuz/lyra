@@ -1,6 +1,9 @@
 // OpenAI-compatible adapter — works with any provider that implements OpenAI API
 // OpenRouter, Gemini, GPT, Ollama, cli-proxy-api, etc.
 
+import * as log from '../log.mjs';
+const TAG = 'openai';
+
 export class OpenAiAdapter {
   #apiKey;
   #baseUrl;
@@ -50,6 +53,20 @@ export class OpenAiAdapter {
 
   async abort(sessionId) {
     return { ok: true };
+  }
+
+  async #fetchGenerationCost(generationId, apiKey) {
+    try {
+      const res = await fetch(`https://openrouter.ai/api/v1/generation?id=${generationId}`, {
+        headers: { 'Authorization': `Bearer ${apiKey || this.#apiKey}` },
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const cost = data.data?.total_cost ?? data.data?.usage?.total_cost ?? null;
+      if (cost != null) log.info(TAG, `generation cost: $${cost} (id=${generationId})`);
+      else log.info(TAG, `generation cost: null, response: ${JSON.stringify(data).substring(0, 200)}`);
+      return cost;
+    } catch { return null; }
   }
 
   #buildRequestBody(request) {
@@ -144,6 +161,7 @@ export class OpenAiAdapter {
     let model = this.#model;
     let usage = null;
     let cost = null;
+    let generationId = null;
 
     for await (const chunk of body) {
       buffer += decoder.decode(chunk, { stream: true });
@@ -163,14 +181,15 @@ export class OpenAiAdapter {
           continue;
         }
 
-        const choice = event.choices?.[0];
-        if (!choice) continue;
-
         model = event.model || model;
+        if (event.id) { generationId = event.id; this._lastGenerationId = event.id; }
         if (event.usage) {
           usage = event.usage;
           if (event.usage.cost !== undefined) cost = event.usage.cost;
         }
+
+        const choice = event.choices?.[0];
+        if (!choice) continue;
 
         const delta = choice.delta;
         if (delta?.content) {
@@ -209,29 +228,32 @@ export class OpenAiAdapter {
             toolCalls.clear();
           }
 
-          // assistant_end
+          // Mark finished — don't yield yet, wait for usage chunk
           if (choice.finish_reason === 'stop' || choice.finish_reason === 'end_turn') {
-            yield {
-              type: 'assistant_end',
-              text: fullText,
-              usage: {
-                input_tokens: usage?.prompt_tokens || 0,
-                output_tokens: usage?.completion_tokens || 0,
-                cache_read_tokens: usage?.prompt_tokens_details?.cached_tokens || 0,
-                cache_write_tokens: usage?.prompt_tokens_details?.cache_write_tokens || 0,
-              },
-              cost_usd: cost,
-              model,
-              stop_reason: choice.finish_reason,
-            };
+            this._finished = choice.finish_reason;
           }
         }
       }
     }
 
-    // If stream ended without explicit finish — emit assistant_end
-    // (skip if already emitted inside the loop)
-    // handled inside the loop via finish_reason check
+    // Emit assistant_end after stream fully consumed (all chunks including usage)
+    if (this._finished) {
+      log.info(TAG, `assistant_end: cost=${cost}, model=${model}`);
+      yield {
+        type: 'assistant_end',
+        text: fullText,
+        usage: {
+          input_tokens: usage?.prompt_tokens || 0,
+          output_tokens: usage?.completion_tokens || 0,
+          cache_read_tokens: usage?.prompt_tokens_details?.cached_tokens || 0,
+          cache_write_tokens: usage?.prompt_tokens_details?.cache_write_tokens || 0,
+        },
+        cost_usd: cost,
+        model,
+        stop_reason: this._finished,
+      };
+      this._finished = null;
+    }
   }
 
   async *#parseNonStream(data) {
