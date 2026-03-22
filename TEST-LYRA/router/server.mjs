@@ -637,12 +637,22 @@ async function runAdapterChat(session, text) {
     input_schema: t.input_schema || {},
   }));
 
+  // Set env vars for codex-cli adapter (MCP tools-mcp.mjs needs these via env_vars forwarding)
+  process.env.LYRA_TOOLS_URL = `http://127.0.0.1:${toolsPort}/tool-call`;
+  process.env.LYRA_SESSION_ID = session.sessionId;
+  process.env.LYRA_CONFIG_NAME = session.configName || '';
+  process.env.LYRA_USER_ID = session.userId || '';
+  process.env.LYRA_DB_ID = session.dbId || '';
+  process.env.LYRA_DB_NAME = session.dbName || '';
+
   const request = {
     session_id: session.sessionId,
     system_prompt: systemPrompt,
     messages: session.messages,
     tools,
-    options: {},  // model already set in adapter.init()
+    options: {},
+    _configName: session.configName,
+    _userId: session.userId,
   };
 
   try {
@@ -718,6 +728,11 @@ function handleAdapterEvent(session, event) {
   // Sanitize
   if (event.type === 'assistant_end' && event.text) {
     event.text = sanitizeText(event.text);
+  }
+
+  // Apply tool labels for tool_status
+  if (event.type === 'tool_status' && profile.toolLabels) {
+    event.description = profile.toolLabels[event.tool] || event.description;
   }
 
   // Publish to client

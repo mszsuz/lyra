@@ -1,7 +1,7 @@
 name: lyra_mobile
 description: Lyra — мобильное приложение для 1С:Предприятие
 publish_to: 'none'
-version: 0.4.0+9
+version: 0.4.2+11
 
 environment:
   sdk: ^3.5.0

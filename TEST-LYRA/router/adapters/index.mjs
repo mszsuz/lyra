@@ -3,11 +3,13 @@
 import { ClaudeApiAdapter } from './claude-api.mjs';
 import { ClaudeCliAdapter } from './claude-cli.mjs';
 import { OpenAiAdapter } from './openai.mjs';
+import { CodexCliAdapter } from './codex-cli.mjs';
 
 const ADAPTERS = {
   'claude-api': ClaudeApiAdapter,
   'claude-cli': ClaudeCliAdapter,
   'openai': OpenAiAdapter,
+  'codex-cli': CodexCliAdapter,
 };
 
 /**
