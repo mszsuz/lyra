@@ -12,6 +12,7 @@ import { createAdapter } from './adapters/index.mjs';
 import { createToolServer, handleToolResult } from './tools.mjs';
 import { verifyAuth, checkBalance, deductBalance, getUserConfig, saveUserSettings } from './users.mjs';
 import { sanitizeText } from './protocol.mjs';
+import { callTool as mcpCallTool } from './mcp-client.mjs';
 import { writeHistory, moveSessionToUser } from './history.mjs';
 import * as log from './log.mjs';
 import { writeFileSync, readFileSync, unlinkSync } from 'node:fs';
@@ -616,7 +617,20 @@ async function startAdapterSession(session, adapterName) {
   session.adapterCapabilities = capabilities;
   session.messages = [];
 
-  log.info(TAG, `Adapter "${adapterName}" started for session ${session.sessionId} (model: ${adapterConfig.model}, caps: ${JSON.stringify(capabilities)})`);
+  // Build MCP server configs for this session (Vega, mcp-1c-docs)
+  session.mcpServers = {};
+  if (profile.vegaConfig && session.configName) {
+    const port = profile.vegaConfig.configs?.[session.configName]?.port;
+    if (port) {
+      session.mcpServers.vega = {
+        url: `http://localhost:${port}/mcp`,
+        headers: profile.vegaConfig.headers || {},
+      };
+    }
+  }
+  session.mcpServers.docs = { url: 'http://localhost:6280/mcp', headers: {} };
+
+  log.info(TAG, `Adapter "${adapterName}" started for session ${session.sessionId} (model: ${adapterConfig.model}, mcp: ${Object.keys(session.mcpServers).join(',')}, caps: ${JSON.stringify(capabilities)})`);
 }
 
 async function runAdapterChat(session, text) {
@@ -630,12 +644,30 @@ async function runAdapterChat(session, text) {
   profile = loadProfile(config.profilePath);
   const systemPrompt = renderSystemPrompt(profile.systemPromptTemplate, session, profile);
 
-  // Build tools
+  // Build tools — client tools + MCP tools (Vega, docs)
   const tools = (profile.clientTools || []).map(t => ({
     name: t.name,
     description: t.description,
     input_schema: t.input_schema || {},
   }));
+
+  // Add Vega MCP tools if available
+  if (session.mcpServers?.vega) {
+    tools.push(
+      { name: 'search_metadata', description: 'Поиск объектов метаданных конфигурации 1С по имени (точное или частичное совпадение). Справочники, документы, регистры, реквизиты, табличные части.', input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Имя или часть имени объекта метаданных' } }, required: ['query'] } },
+      { name: 'search_metadata_by_description', description: 'Семантический поиск объектов метаданных по описанию назначения. Пример: «хранение цен номенклатуры» → найдёт РегистрСведений.ЦеныНоменклатуры', input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Описание назначения объекта' } }, required: ['query'] } },
+      { name: 'search_code', description: 'Поиск в BSL-коде конфигурации (модули, процедуры, функции). Ищет по тексту кода.', input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Текст для поиска в коде' } }, required: ['query'] } },
+    );
+  }
+
+  // Add mcp-1c-docs tools if available
+  if (session.mcpServers?.docs) {
+    tools.push(
+      { name: 'search_docs', description: 'Поиск по документации 1С (справочник языка, примеры, решения, статьи). Используй для вопросов о встроенных функциях, методах, свойствах, синтаксисе.', input_schema: { type: 'object', properties: { library: { type: 'string', description: 'Библиотека: 1c-language-8.3.27, 1c-examples, 1c-solutions, 1c-knowledge' }, query: { type: 'string', description: 'Поисковый запрос' } }, required: ['library', 'query'] } },
+      { name: 'fetch_url', description: 'Получить полный текст страницы документации по URL из результатов search_docs', input_schema: { type: 'object', properties: { url: { type: 'string', description: 'URL страницы документации' }, library: { type: 'string', description: 'Библиотека' } }, required: ['url', 'library'] } },
+      { name: 'list_libraries', description: 'Список доступных библиотек документации 1С', input_schema: { type: 'object', properties: {} } },
+    );
+  }
 
   // Set env vars for codex-cli adapter (MCP tools-mcp.mjs needs these via env_vars forwarding)
   process.env.LYRA_TOOLS_URL = `http://127.0.0.1:${toolsPort}/tool-call`;
@@ -763,6 +795,14 @@ function handleAdapterEvent(session, event) {
   }
 }
 
+function extractMcpText(mcpResult) {
+  if (!mcpResult?.content) return JSON.stringify(mcpResult);
+  return mcpResult.content
+    .filter(c => c.type === 'text')
+    .map(c => c.text)
+    .join('\n') || JSON.stringify(mcpResult);
+}
+
 async function executeToolCall(session, toolUse) {
   log.info(TAG, `🔧 Tool call: ${toolUse.name} (session ${session.sessionId})`);
 
@@ -780,6 +820,24 @@ async function executeToolCall(session, toolUse) {
     } catch (err) {
       return { error: err.message };
     }
+  }
+
+  // MCP tools — Vega (search_code, search_metadata, search_metadata_by_description)
+  const vegaTools = ['search_code', 'search_metadata', 'search_metadata_by_description'];
+  if (vegaTools.includes(toolUse.name) && session.mcpServers?.vega) {
+    const { url, headers } = session.mcpServers.vega;
+    log.info(TAG, `🔧 MCP→Vega: ${toolUse.name}`);
+    const result = await mcpCallTool(url, toolUse.name, toolUse.input, headers);
+    return result.error ? { error: result.error } : { result: extractMcpText(result) };
+  }
+
+  // MCP tools — mcp-1c-docs (search_docs, fetch_url, list_libraries)
+  const docsTools = ['search_docs', 'fetch_url', 'list_libraries'];
+  if (docsTools.includes(toolUse.name) && session.mcpServers?.docs) {
+    const { url, headers } = session.mcpServers.docs;
+    log.info(TAG, `🔧 MCP→docs: ${toolUse.name}`);
+    const result = await mcpCallTool(url, toolUse.name, toolUse.input, headers);
+    return result.error ? { error: result.error } : { result: extractMcpText(result) };
   }
 
   // Client tools — via Centrifugo → Chat 1С
