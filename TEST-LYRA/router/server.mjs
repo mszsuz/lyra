@@ -15,6 +15,7 @@ import { sanitizeText } from './protocol.mjs';
 import { executeTool } from './tool-execution.mjs';
 import { processEvent as billingProcessEvent } from './billing.mjs';
 import * as conversation from './conversation.mjs';
+import { findRelevantLinks, warmup as ragWarmup } from './rag.mjs';
 import { writeHistory, moveSessionToUser } from './history.mjs';
 import * as log from './log.mjs';
 import { writeFileSync, readFileSync, unlinkSync } from 'node:fs';
@@ -636,6 +637,11 @@ async function startAdapterSession(session, adapterName) {
   session.systemPrompt = renderSystemPrompt(profile.systemPromptTemplate, session, profile);
   session.tools = buildSessionTools(profile, session);
 
+  // Pre-warm MCP sessions for fast RAG on first message
+  if (config.rag?.enabled) {
+    ragWarmup(session.mcpServers);
+  }
+
   log.info(TAG, `Adapter "${adapterName}" started for session ${session.sessionId} (model: ${adapterConfig.model}, mcp: ${Object.keys(session.mcpServers).join(',')}, tools: ${session.tools.length}, caps: ${JSON.stringify(capabilities)})`);
 }
 
@@ -709,6 +715,15 @@ async function runAdapterChat(session, text) {
 
 // Subflow A: Router manages history + tool execution (openai, claude-api)
 async function runAdapterChatManaged(session, text) {
+  // RAG — enrich question with relevant metadata/docs links
+  if (config.rag?.enabled && (session.mcpServers?.vega || session.mcpServers?.docs) && text.length >= 5) {
+    const ragResult = await findRelevantLinks(text, session.mcpServers, config.rag, session.configName);
+    if (ragResult?.rag) {
+      text = text + '\n' + ragResult.rag;
+      log.info(TAG, `RAG enriched (${ragResult.ms}ms)`);
+    }
+  }
+
   conversation.addUserMessage(session, text);
 
   const request = {

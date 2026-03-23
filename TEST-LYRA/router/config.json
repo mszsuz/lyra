@@ -16,5 +16,10 @@
   "logLevel": "debug",
   "sessionTTL": 14400000,
   "sessionWarningBefore": 300000,
-  "dataDir": ".."
+  "dataDir": "..",
+  "rag": {
+    "enabled": true,
+    "model": "arcee-ai/trinity-large-preview:free",
+    "timeout": 5000
+  }
 }

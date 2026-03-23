@@ -66,6 +66,14 @@ export function loadConfig() {
     profilePath: raw.profilePath || './profiles/default',
     logLevel: raw.logLevel || 'info',
     sessionTTL: raw.sessionTTL || 30 * 60 * 1000, // 30 min
+    rag: {
+      enabled: raw.rag?.enabled ?? false,
+      model: raw.rag?.model || 'arcee-ai/trinity-large-preview:free',
+      base_url: raw.rag?.base_url || raw.adapters?.openai?.base_url || 'https://openrouter.ai/api/v1',
+      api_key: raw.rag?.api_key || raw.adapters?.openai?.api_key || process.env.OPENROUTER_API_KEY || '',
+      timeout: raw.rag?.timeout || 3000,
+    },
+    adapters: raw.adapters || {},
     dataDir,
   };
 
