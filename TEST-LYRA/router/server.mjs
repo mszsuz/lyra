@@ -639,6 +639,15 @@ async function startAdapterSession(session, adapterName) {
   log.info(TAG, `Adapter "${adapterName}" started for session ${session.sessionId} (model: ${adapterConfig.model}, mcp: ${Object.keys(session.mcpServers).join(',')}, tools: ${session.tools.length}, caps: ${JSON.stringify(capabilities)})`);
 }
 
+const _VEGA_TOOLS = new Set(['search_code', 'search_metadata', 'search_metadata_by_description']);
+const _DOCS_TOOLS = new Set(['search_docs', 'fetch_url', 'list_libraries']);
+
+function resolveToolKey(toolName, session) {
+  if (_VEGA_TOOLS.has(toolName) && session.mcpServers?.vega) return `mcp__vega__${toolName}`;
+  if (_DOCS_TOOLS.has(toolName) && session.mcpServers?.docs) return `mcp__mcp-1c-docs__${toolName}`;
+  return `mcp__1c__${toolName}`;
+}
+
 function buildSessionTools(profile, session) {
   const tools = (profile.clientTools || []).map(t => ({
     name: t.name,
@@ -712,43 +721,57 @@ async function runAdapterChatManaged(session, text) {
     _userId: session.userId,
   };
 
+  let accumulatedCostUsd = 0;
+
   try {
     let maxTurns = 10;
     while (maxTurns-- > 0) {
       const currentRequest = { ...request, messages: conversation.getMessages(session) };
-      let hadToolUse = false;
+      let pendingTools = [];
 
       for await (const event of session.adapter.chat(currentRequest)) {
-        handleAdapterEvent(session, event);
-
         if (event.type === 'tool_use') {
-          hadToolUse = true;
+          pendingTools.push(event);
           log.info(TAG, `Tool use from adapter: ${event.name}`);
-          const toolLabel = profile.toolLabels?.[`mcp__1c__${event.name}`] || event.name;
+          const toolKey = resolveToolKey(event.name, session);
+          const toolLabel = profile.toolLabels?.[toolKey] || event.name;
           centrifugo.apiPublish(session.channel, {
-            type: 'tool_status', tool: `mcp__1c__${event.name}`, description: toolLabel,
+            type: 'tool_status', tool: toolKey, description: toolLabel,
           }).catch(() => {});
-
-          const toolResult = await executeTool(session, event, {
-            centrifugo,
-            toolCallTimeout: config.toolCallTimeout,
-          });
-
-          conversation.addToolUse(session, { id: event.id, name: event.name, input: event.input });
-          conversation.addToolResult(session, event.id, toolResult.content, toolResult.isError);
-          log.info(TAG, `Tool result received, continuing with model...`);
-          break;
+          continue; // don't break — wait for assistant_end with cost
         }
 
         if (event.type === 'assistant_end') {
-          conversation.addAssistantMessage(session, event.text);
-          billingProcessEvent(session, event, centrifugo);
-          hadToolUse = false;
+          if (pendingTools.length > 0) {
+            // Tool turn — don't publish to client, accumulate cost, execute tools
+            accumulatedCostUsd += event.cost_usd || 0;
+            for (const tu of pendingTools) {
+              const toolResult = await executeTool(session, tu, {
+                centrifugo,
+                toolCallTimeout: config.toolCallTimeout,
+              });
+              conversation.addToolUse(session, { id: tu.id, name: tu.name, input: tu.input });
+              conversation.addToolResult(session, tu.id, toolResult.content, toolResult.isError);
+            }
+            log.info(TAG, `Tool results received (${pendingTools.length} tools, accumulated cost: $${accumulatedCostUsd.toFixed(4)}), continuing...`);
+          } else {
+            // Final answer — include accumulated cost from all turns
+            if (accumulatedCostUsd > 0) {
+              event.cost_usd = (event.cost_usd || 0) + accumulatedCostUsd;
+              event.cost_rub = Math.round(event.cost_usd * 100 * 100) / 100;
+            }
+            handleAdapterEvent(session, event);
+            conversation.addAssistantMessage(session, event.text);
+            billingProcessEvent(session, event, centrifugo);
+          }
           break;
         }
+
+        // Forward other events (text_delta, tool_status, etc.) to client
+        handleAdapterEvent(session, event);
       }
 
-      if (!hadToolUse) break;
+      if (pendingTools.length === 0) break; // No tool calls — done
     }
   } catch (err) {
     log.error(TAG, `Adapter error: ${err.message} ${err.stack || ''}`);
@@ -815,6 +838,11 @@ function handleAdapterEvent(session, event) {
     event.description = profile.toolLabels[event.tool] || event.description;
   }
 
+  // Add cost in rubles for Chat display
+  if (event.type === 'assistant_end' && event.cost_usd) {
+    event.cost_rub = Math.round(event.cost_usd * 100 * 100) / 100;
+  }
+
   // Publish to client
   writeHistory(session, 'out', event);
   centrifugo.apiPublish(session.channel, event).catch(err => {
@@ -870,6 +898,11 @@ function spawnClaudeForSession(session, initialMessage, { resume = false } = {})
       // Sanitize assistant_end text: markdown headings → bold, strip HTML tags
       if (event.type === 'assistant_end' && event.text) {
         event.text = sanitizeText(event.text);
+      }
+
+      // Add cost in rubles for Chat display
+      if (event.type === 'assistant_end' && event.cost_usd) {
+        event.cost_rub = Math.round(event.cost_usd * 100 * 100) / 100;
       }
 
       // Forward universal protocol events to session channel

@@ -231,16 +231,18 @@ export class OpenAiAdapter {
           }
 
           // Mark finished — don't yield yet, wait for usage chunk
-          if (choice.finish_reason === 'stop' || choice.finish_reason === 'end_turn') {
-            this._finished = choice.finish_reason;
-          }
+          this._finished = choice.finish_reason;
         }
       }
     }
 
     // Emit assistant_end after stream fully consumed (all chunks including usage)
     if (this._finished) {
-      log.info(TAG, `assistant_end: cost=${cost}, model=${model}`);
+      // Fetch cost from OpenRouter generation API if not in SSE stream
+      if (cost == null && generationId && this.#baseUrl.includes('openrouter')) {
+        cost = await this.#fetchGenerationCost(generationId);
+      }
+      log.info(TAG, `assistant_end: cost=${cost}, model=${model}, stop=${this._finished}`);
       yield {
         type: 'assistant_end',
         text: fullText,
