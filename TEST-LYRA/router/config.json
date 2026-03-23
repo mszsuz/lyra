@@ -19,7 +19,7 @@
   "dataDir": "..",
   "rag": {
     "enabled": true,
-    "model": "arcee-ai/trinity-large-preview:free",
+    "model": "google/gemini-2.0-flash-lite-001",
     "timeout": 5000
   }
 }

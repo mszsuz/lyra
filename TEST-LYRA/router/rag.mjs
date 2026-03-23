@@ -1,97 +1,105 @@
-// RAG layer — finds relevant links from Vega/docs before sending user question to main model
-// Free LLM translates user question to 1C terms → parallel MCP search → links as <rag> tag
+// RAG layer — enriches user message with metadata and documentation from MCP
+// Flash Lite agent picks search queries → parallel MCP search → programmatic trim → <rag> tag
 
 import { callTool as mcpCallTool } from './mcp-client.mjs';
 import * as log from './log.mjs';
 
 const TAG = 'rag';
 
+// --- Config name → docs library mapping ---
+
+const _CONFIG_TO_DOCS_LIBRARY = {
+  'БухгалтерияПредприятия': '1c-config-accounting',
+  'ЗарплатаИУправлениеПерсоналом': '1c-config-hrm',
+  'УправлениеТорговлей': '1c-config-trade',
+  'УправлениеПредприятием': '1c-config-enterprise20',
+};
+
+// Categories useful for the model (where data lives or can be queried)
+const _USEFUL_CATEGORIES = new Set([
+  'Документы', 'Справочники', 'Отчеты', 'Обработки', 'ПланыСчетов',
+  'РегистрыСведений', 'РегистрыНакопления', 'РегистрыБухгалтерии', 'РегистрыРасчета',
+  'ПланыВидовХарактеристик', 'ПланыВидовРасчета', 'ЖурналыДокументов',
+  'Перечисления', 'БизнесПроцессы', 'Задачи',
+]);
+
 /**
  * Pre-initialize MCP sessions (handshake) so RAG calls are fast.
  * Call once at session start, fire-and-forget.
  */
 export function warmup(mcpServers) {
-  const servers = [mcpServers?.vega, mcpServers?.docs].filter(Boolean);
-  for (const s of servers) {
-    if (s === mcpServers.vega) {
-      mcpCallTool(s.url, 'search_metadata', { query: JSON.stringify({ op: 'list_objects_by_name', name: '_warmup_', match: 'exact' }) }, s.headers)
-        .then(() => log.info(TAG, `Warmup: vega ready`))
-        .catch(e => log.warn(TAG, `Warmup vega failed: ${e.message}`));
-    } else {
-      mcpCallTool(s.url, 'list_libraries', {}, s.headers)
-        .then(() => log.info(TAG, `Warmup: docs ready`))
-        .catch(e => log.warn(TAG, `Warmup docs failed: ${e.message}`));
-    }
+  if (mcpServers?.vega) {
+    mcpCallTool(mcpServers.vega.url, 'search_metadata', { query: JSON.stringify({ op: 'list_objects_by_name', name: '_warmup_', match: 'exact' }) }, mcpServers.vega.headers)
+      .then(() => log.info(TAG, 'Warmup: vega ready'))
+      .catch(e => log.warn(TAG, `Warmup vega failed: ${e.message}`));
+  }
+  if (mcpServers?.docs) {
+    mcpCallTool(mcpServers.docs.url, 'list_libraries', {}, mcpServers.docs.headers)
+      .then(() => log.info(TAG, 'Warmup: docs ready'))
+      .catch(e => log.warn(TAG, `Warmup docs failed: ${e.message}`));
   }
 }
 
 /**
- * Find relevant metadata/docs links for a user question.
- * Step 1: Free LLM extracts 1C-specific search terms from user question.
- * Step 2: Parallel search in Vega + docs MCP servers.
- * @param {string} question - User's question text
- * @param {object} mcpServers - { vega?: { url, headers }, docs?: { url, headers } }
- * @param {object} ragConfig - { model, base_url, api_key, timeout }
- * @param {string} configName - 1C configuration name
- * @returns {Promise<{ rag: string, ms: number } | null>}
+ * Find relevant metadata and documentation for a user question.
+ *
+ * Flow:
+ *   1. Flash Lite picks search queries via function calling (~1 sec)
+ *   2. MCP servers return data in parallel (~1 sec)
+ *   3. Results trimmed programmatically — no LLM on output (~0 ms)
+ *   4. Real content (not just links) inserted into <rag> tag
+ *
+ * @returns {{ rag: string, ms: number } | null}
  */
 export async function findRelevantLinks(question, mcpServers, ragConfig, configName) {
   const start = Date.now();
   const timeout = ragConfig.timeout || 5000;
+  const docsLibrary = _CONFIG_TO_DOCS_LIBRARY[configName] || '1c-language-8.3.27';
 
-  // Step 1: LLM translates user question to 1C domain terms
-  let keywords;
+  // Step 1: Flash Lite picks search queries
+  let toolCalls;
   try {
-    keywords = await getKeywords(question, ragConfig, configName);
+    toolCalls = await getToolCalls(question, ragConfig, configName, docsLibrary);
   } catch (err) {
-    log.warn(TAG, `Keywords failed: ${err.message}`);
+    log.warn(TAG, `Agent failed: ${err.message}`);
     return null;
   }
-  if (!keywords) return null;
-
-  log.info(TAG, `Keywords (${Date.now() - start}ms): meta="${keywords.metadata_query}", docs="${keywords.docs_query}"`);
-
-  // Step 2: Parallel search in Vega + docs
-  const searches = [];
-
-  if (keywords.metadata_query && mcpServers?.vega) {
-    searches.push(searchVega(mcpServers.vega, keywords.metadata_query, timeout));
-  } else {
-    searches.push(Promise.resolve(null));
-  }
-
-  if (keywords.docs_query && mcpServers?.docs) {
-    searches.push(searchDocs(mcpServers.docs, keywords.docs_query, timeout, configName));
-  } else {
-    searches.push(Promise.resolve(null));
-  }
-
-  const [vegaResult, docsResult] = await Promise.allSettled(searches);
-
-  const metaLinks = vegaResult.status === 'fulfilled' ? vegaResult.value : null;
-  const docsLinks = docsResult.status === 'fulfilled' ? docsResult.value : null;
-
-  if (!metaLinks && !docsLinks) {
-    log.info(TAG, `No links found (${Date.now() - start}ms)`);
+  if (!toolCalls?.length) {
+    log.warn(TAG, `Agent returned no tool calls (${Date.now() - start}ms)`);
     return null;
   }
 
-  // Build <rag> tag
+  log.info(TAG, `Agent (${Date.now() - start}ms): ${toolCalls.map(t => t.function.name + '(' + JSON.parse(t.function.arguments).query?.slice(0, 40) + ')').join(', ')}`);
+
+  // Step 2: Execute MCP calls in parallel
+  const results = await Promise.allSettled(
+    toolCalls.map(tc => executeMcpCall(tc, mcpServers, docsLibrary, timeout))
+  );
+
+  // Step 3: Programmatic trim — no LLM
   const parts = [];
-  if (metaLinks) parts.push(`Метаданные: ${metaLinks}`);
-  if (docsLinks) parts.push(`Документация: ${docsLinks}`);
+  for (let i = 0; i < toolCalls.length; i++) {
+    if (results[i].status !== 'fulfilled' || !results[i].value) continue;
+    const { name, content } = results[i].value;
+    if (name === 'search_metadata' && content) parts.push(`Метаданные: ${content}`);
+    if (name === 'search_docs' && content) parts.push(`Документация:\n${content}`);
+  }
+
+  if (!parts.length) {
+    log.info(TAG, `No results (${Date.now() - start}ms)`);
+    return null;
+  }
 
   const rag = `<rag>\n${parts.join('\n')}\n</rag>`;
   const ms = Date.now() - start;
 
-  log.info(TAG, `Enriched (${ms}ms): ${metaLinks ? 'meta' : '-'}/${docsLinks ? 'docs' : '-'}`);
+  log.info(TAG, `Enriched (${ms}ms, ${rag.length} chars)`);
   return { rag, ms };
 }
 
-/**
- * Call free LLM to translate user question into 1C search terms.
- */
-async function getKeywords(question, ragConfig, configName) {
+// --- Step 1: Flash Lite agent ---
+
+async function getToolCalls(question, ragConfig, configName, docsLibrary) {
   const res = await withTimeout(
     fetch(`${ragConfig.base_url}/chat/completions`, {
       method: 'POST',
@@ -103,15 +111,21 @@ async function getKeywords(question, ragConfig, configName) {
         model: ragConfig.model,
         messages: [{
           role: 'user',
-          content: `Ты — ассистент по 1С:Предприятие. Конфигурация: «${configName || 'неизвестная'}».
-Подбери ключевые слова для поиска по вопросу пользователя.
-1. metadata_query — описание на естественном языке для семантического поиска объектов метаданных (НЕ технические имена, а синонимы и описания: "приходный кассовый ордер", "цены номенклатуры")
-2. docs_query — ключевые слова для поиска по документации языка 1С (методы, функции, свойства, типы)
-Верни строго JSON: {"metadata_query": "...", "docs_query": "..."}
-
-Вопрос: ${question}`,
+          content: `Поисковый агент 1С:${configName}. Вызови ОБА инструмента чтобы найти метаданные и документацию по вопросу. НЕ отвечай текстом.\n\nВопрос: ${question}`,
         }],
-        max_tokens: 200,
+        tools: [
+          { type: 'function', function: {
+            name: 'search_metadata',
+            description: `Семантический поиск объектов метаданных конфигурации ${configName} (регистры, документы, справочники, отчёты) по описанию на естественном языке`,
+            parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+          }},
+          { type: 'function', function: {
+            name: 'search_docs',
+            description: `Поиск по документации конфигурации ${configName} (библиотека ${docsLibrary}): ответы на вопросы, инструкции, примеры`,
+            parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+          }},
+        ],
+        tool_choice: 'required',
         temperature: 0,
       }),
     }),
@@ -119,155 +133,103 @@ async function getKeywords(question, ragConfig, configName) {
   );
 
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
   const data = await res.json();
-  const content = data.choices?.[0]?.message?.content || '';
-
-  const match = content.match(/\{[^}]*"metadata_query"[^}]*\}/);
-  if (!match) {
-    log.warn(TAG, `Invalid keywords response: ${content.slice(0, 200)}`);
-    return null;
-  }
-
-  return JSON.parse(match[0]);
+  return data.choices?.[0]?.message?.tool_calls || null;
 }
 
-/**
- * Search Vega for metadata objects by description.
- */
-async function searchVega(vega, query, timeout) {
-  try {
-    const args = {
-      query: JSON.stringify({ op: 'search_metadata_by_description', text: query }),
-    };
+// --- Step 2: Execute MCP calls ---
 
+async function executeMcpCall(tc, mcpServers, docsLibrary, timeout) {
+  const args = JSON.parse(tc.function.arguments);
+  const name = tc.function.name;
+
+  if (name === 'search_metadata' && mcpServers?.vega) {
     const result = await withTimeout(
-      mcpCallTool(vega.url, 'search_metadata_by_description', args, vega.headers),
+      mcpCallTool(mcpServers.vega.url, 'search_metadata_by_description',
+        { query: JSON.stringify({ op: 'search_metadata_by_description', text: args.query }) },
+        mcpServers.vega.headers),
       timeout,
     );
-    if (result.error) {
-      log.warn(TAG, `Vega error: ${result.error}`);
-      return null;
-    }
-
-    return parseVegaLinks(result);
-  } catch (err) {
-    log.warn(TAG, `Vega search failed: ${err.message}`);
-    return null;
+    if (result.error) { log.warn(TAG, `Vega error: ${result.error}`); return null; }
+    return { name, content: trimVega(result) };
   }
-}
 
-// configName → docs library mapping (mirrors Vega config names)
-const _CONFIG_TO_DOCS_LIBRARY = {
-  'БухгалтерияПредприятия': '1c-config-accounting',
-  'ЗарплатаИУправлениеПерсоналом': '1c-config-hrm',
-  'УправлениеТорговлей': '1c-config-trade',
-  'УправлениеПредприятием': '1c-config-enterprise20',
-};
-
-/**
- * Search docs for configuration-specific documentation.
- */
-async function searchDocs(docs, query, timeout, configName) {
-  const library = _CONFIG_TO_DOCS_LIBRARY[configName] || '1c-language-8.3.27';
-  try {
-    const args = { library, query };
-
+  if (name === 'search_docs' && mcpServers?.docs) {
     const result = await withTimeout(
-      mcpCallTool(docs.url, 'search_docs', args, docs.headers),
+      mcpCallTool(mcpServers.docs.url, 'search_docs',
+        { library: docsLibrary, query: args.query },
+        mcpServers.docs.headers),
       timeout,
     );
-    if (result.error) {
-      log.warn(TAG, `Docs error: ${result.error}`);
-      return null;
-    }
-
-    return parseDocsLinks(result);
-  } catch (err) {
-    log.warn(TAG, `Docs search failed: ${err.message}`);
-    return null;
+    if (result.error) { log.warn(TAG, `Docs error: ${result.error}`); return null; }
+    return { name, content: trimDocs(result) };
   }
+
+  return null;
 }
 
-/**
- * Timeout wrapper for promises.
- */
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('RAG timeout')), ms)),
-  ]);
-}
+// --- Step 3: Programmatic trim ---
 
-// Categories useful for the model (where data lives or can be queried)
-const _USEFUL_CATEGORIES = new Set([
-  'Документы', 'Справочники', 'Отчеты', 'Обработки', 'ПланыСчетов',
-  'РегистрыСведений', 'РегистрыНакопления', 'РегистрыБухгалтерии', 'РегистрыРасчета',
-  'ПланыВидовХарактеристик', 'ПланыВидовРасчета', 'ЖурналыДокументов',
-  'Перечисления', 'БизнесПроцессы', 'Задачи',
-]);
-
-/**
- * Parse Vega MCP result into compact link string.
- * Filters to useful categories only (registers, documents, references, etc.)
- */
-function parseVegaLinks(result) {
+function trimVega(result) {
   const text = extractMcpText(result);
   if (!text) return null;
 
-  const links = [];
-  const lines = text.split('\n');
-
-  for (const line of lines) {
+  const items = [];
+  for (const line of text.split('\n')) {
     if (!line.includes('|')) continue;
     const cols = line.split('|').map(c => c.trim()).filter(Boolean);
     if (cols.length < 4 || cols[0] === '#' || cols[0].startsWith('---')) continue;
-    const name = cols[1];
-    const category = cols[2];
-    const synonym = cols[3];
+    const name = cols[1], category = cols[2], synonym = cols[3];
     if (!name || !category || !_USEFUL_CATEGORIES.has(category)) continue;
-    const display = synonym && synonym !== name ? `${synonym} (${category}.${name})` : `${category}.${name}`;
-    links.push(display);
-    if (links.length >= 10) break;
+    items.push(synonym && synonym !== name ? `${synonym} (${category}.${name})` : `${category}.${name}`);
+    if (items.length >= 7) break;
   }
 
-  return links.length > 0 ? links.join(', ') : null;
+  return items.length > 0 ? items.join(', ') : null;
 }
 
-/**
- * Parse docs MCP result into compact link string.
- * Handles two formats:
- * - Language docs: "## название: X" / "родитель: Y" blocks
- * - Config docs: "Result N: file:///..." with "## Title" headers
- */
-function parseDocsLinks(result) {
+function trimDocs(result) {
   const text = extractMcpText(result);
   if (!text) return null;
 
-  const links = [];
   const blocks = text.split(/^-{3,}$/m);
+  const snippets = [];
 
   for (const block of blocks) {
-    if (links.length >= 5) break;
+    if (snippets.length >= 3) break;
 
-    // Format 1: language docs (## название: X)
+    // Config docs: "## Title" after "Result N:"
+    const titleMatch = block.match(/^##\s+(.+)/m);
+    if (titleMatch && block.includes('Result')) {
+      const title = titleMatch[1].trim();
+      const bodyStart = block.indexOf(titleMatch[0]) + titleMatch[0].length;
+      const body = block.slice(bodyStart).replace(/!\[.*?\]\(.*?\)/g, '').trim().slice(0, 400);
+      snippets.push(`## ${title}\n${body}`);
+      continue;
+    }
+
+    // Language docs: "## название: X"
     const nameMatch = block.match(/##\s*название:\s*(.+)/);
     if (nameMatch) {
       const name = nameMatch[1].trim();
       const parentMatch = block.match(/родитель:\s*(.+)/);
       const parent = parentMatch ? parentMatch[1].trim() : '';
-      links.push(parent ? `${parent}.${name}` : name);
-      continue;
-    }
-
-    // Format 2: config docs (## Title after Result header)
-    const titleMatch = block.match(/^##\s+(.+)/m);
-    if (titleMatch && block.includes('Result')) {
-      links.push(titleMatch[1].trim());
+      const descMatch = block.match(/<описание>\s*(.*?)\s*<\/описание>/s);
+      const desc = descMatch ? descMatch[1].trim().slice(0, 200) : '';
+      snippets.push(`${parent ? parent + '.' : ''}${name}${desc ? ': ' + desc : ''}`);
     }
   }
 
-  return links.length > 0 ? links.join(', ') : null;
+  return snippets.length > 0 ? snippets.join('\n---\n') : null;
+}
+
+// --- Helpers ---
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('RAG timeout')), ms)),
+  ]);
 }
 
 function extractMcpText(mcpResult) {
