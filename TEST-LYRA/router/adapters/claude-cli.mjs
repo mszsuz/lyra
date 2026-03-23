@@ -36,6 +36,8 @@ export class ClaudeCliAdapter {
       thinking: true,
       max_context_tokens: 200000,
       max_output_tokens: 64000,
+      history_mode: 'adapter',
+      tool_mode: 'adapter',
     };
   }
 

@@ -21,6 +21,8 @@ export class CodexCliAdapter {
       thinking: false,
       max_context_tokens: 200000,
       max_output_tokens: 32000,
+      history_mode: 'adapter',
+      tool_mode: 'adapter',
     };
   }
 

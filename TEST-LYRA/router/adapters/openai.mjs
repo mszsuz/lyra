@@ -21,6 +21,8 @@ export class OpenAiAdapter {
       thinking: false,
       max_context_tokens: 128000,
       max_output_tokens: 16384,
+      history_mode: 'router',
+      tool_mode: 'router',
     };
   }
 

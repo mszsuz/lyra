@@ -10,9 +10,11 @@ import { loadProfile, writeTempFiles, renderSystemPrompt } from './profiles.mjs'
 import { spawnClaude } from './claude.mjs';
 import { createAdapter } from './adapters/index.mjs';
 import { createToolServer, handleToolResult } from './tools.mjs';
-import { verifyAuth, checkBalance, deductBalance, getUserConfig, saveUserSettings } from './users.mjs';
+import { verifyAuth, checkBalance, getUserConfig, saveUserSettings } from './users.mjs';
 import { sanitizeText } from './protocol.mjs';
-import { callTool as mcpCallTool } from './mcp-client.mjs';
+import { executeTool } from './tool-execution.mjs';
+import { processEvent as billingProcessEvent } from './billing.mjs';
+import * as conversation from './conversation.mjs';
 import { writeHistory, moveSessionToUser } from './history.mjs';
 import * as log from './log.mjs';
 import { writeFileSync, readFileSync, unlinkSync } from 'node:fs';
@@ -630,28 +632,20 @@ async function startAdapterSession(session, adapterName) {
   }
   session.mcpServers.docs = { url: 'http://localhost:6280/mcp', headers: {} };
 
-  log.info(TAG, `Adapter "${adapterName}" started for session ${session.sessionId} (model: ${adapterConfig.model}, mcp: ${Object.keys(session.mcpServers).join(',')}, caps: ${JSON.stringify(capabilities)})`);
+  // Pre-render system prompt and tools once per session (cache-friendly)
+  session.systemPrompt = renderSystemPrompt(profile.systemPromptTemplate, session, profile);
+  session.tools = buildSessionTools(profile, session);
+
+  log.info(TAG, `Adapter "${adapterName}" started for session ${session.sessionId} (model: ${adapterConfig.model}, mcp: ${Object.keys(session.mcpServers).join(',')}, tools: ${session.tools.length}, caps: ${JSON.stringify(capabilities)})`);
 }
 
-async function runAdapterChat(session, text) {
-  session.streaming = true;
-  session._chatReceivedTime = Date.now();
-
-  // Add user message to history
-  session.messages.push({ role: 'user', content: text });
-
-  // Build system prompt
-  profile = loadProfile(config.profilePath);
-  const systemPrompt = renderSystemPrompt(profile.systemPromptTemplate, session, profile);
-
-  // Build tools — client tools + MCP tools (Vega, docs)
+function buildSessionTools(profile, session) {
   const tools = (profile.clientTools || []).map(t => ({
     name: t.name,
     description: t.description,
     input_schema: t.input_schema || {},
   }));
 
-  // Add Vega MCP tools if available
   if (session.mcpServers?.vega) {
     tools.push(
       { name: 'search_metadata', description: 'Поиск объектов метаданных конфигурации 1С по имени (точное или частичное совпадение). Справочники, документы, регистры, реквизиты, табличные части.', input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Имя или часть имени объекта метаданных' } }, required: ['query'] } },
@@ -660,7 +654,6 @@ async function runAdapterChat(session, text) {
     );
   }
 
-  // Add mcp-1c-docs tools if available
   if (session.mcpServers?.docs) {
     tools.push(
       { name: 'search_docs', description: 'Поиск по документации 1С (справочник языка, примеры, решения, статьи). Используй для вопросов о встроенных функциях, методах, свойствах, синтаксисе.', input_schema: { type: 'object', properties: { library: { type: 'string', description: 'Библиотека: 1c-language-8.3.27, 1c-examples, 1c-solutions, 1c-knowledge' }, query: { type: 'string', description: 'Поисковый запрос' } }, required: ['library', 'query'] } },
@@ -668,6 +661,13 @@ async function runAdapterChat(session, text) {
       { name: 'list_libraries', description: 'Список доступных библиотек документации 1С', input_schema: { type: 'object', properties: {} } },
     );
   }
+
+  return tools;
+}
+
+async function runAdapterChat(session, text) {
+  session.streaming = true;
+  session._chatReceivedTime = Date.now();
 
   // Set env vars for codex-cli adapter (MCP tools-mcp.mjs needs these via env_vars forwarding)
   process.env.LYRA_TOOLS_URL = `http://127.0.0.1:${toolsPort}/tool-call`;
@@ -677,58 +677,15 @@ async function runAdapterChat(session, text) {
   process.env.LYRA_DB_ID = session.dbId || '';
   process.env.LYRA_DB_NAME = session.dbName || '';
 
-  const request = {
-    session_id: session.sessionId,
-    system_prompt: systemPrompt,
-    messages: session.messages,
-    tools,
-    options: {},
-    _configName: session.configName,
-    _userId: session.userId,
-  };
+  const caps = session.adapterCapabilities || {};
 
-  try {
-    let maxTurns = 10; // prevent infinite loops
-    while (maxTurns-- > 0) {
-      const currentRequest = { ...request, messages: [...session.messages] };
-      let hadToolUse = false;
-
-      for await (const event of session.adapter.chat(currentRequest)) {
-        handleAdapterEvent(session, event);
-
-        if (event.type === 'tool_use') {
-          hadToolUse = true;
-          log.info(TAG, `Tool use from adapter: ${event.name}`);
-          // Show progress in Chat UI
-          const toolLabel = profile.toolLabels?.[`mcp__1c__${event.name}`] || event.name;
-          centrifugo.apiPublish(session.channel, {
-            type: 'tool_status', tool: `mcp__1c__${event.name}`, description: toolLabel,
-          }).catch(() => {});
-          const toolResult = await executeToolCall(session, event);
-          session.messages.push({
-            role: 'assistant',
-            content: [{ type: 'tool_use', id: event.id, name: event.name, input: event.input }],
-          });
-          session.messages.push({
-            role: 'tool_result',
-            tool_use_id: event.id,
-            content: JSON.stringify(toolResult),
-          });
-          log.info(TAG, `Tool result received, continuing with model...`);
-          break; // break inner loop, continue outer while
-        }
-
-        if (event.type === 'assistant_end') {
-          hadToolUse = false; // done
-          break;
-        }
-      }
-
-      if (!hadToolUse) break; // No more tool calls — done
-    }
-  } catch (err) {
-    log.error(TAG, `Adapter error: ${err.message} ${err.stack || ''}`);
-    centrifugo.apiPublish(session.channel, { type: 'error', message: 'Ошибка модели' });
+  if (caps.history_mode === 'adapter') {
+    // Subflow B: adapter manages history (codex-cli, claude-cli)
+    // Pass only the current message — adapter handles conversation internally
+    await runAdapterChatPassthrough(session, text);
+  } else {
+    // Subflow A: router manages history (openai, claude-api)
+    await runAdapterChatManaged(session, text);
   }
 
   session.streaming = false;
@@ -738,6 +695,91 @@ async function runAdapterChat(session, text) {
     const pending = session.pendingMessage;
     session.pendingMessage = null;
     runAdapterChat(session, pending);
+  }
+}
+
+// Subflow A: Router manages history + tool execution (openai, claude-api)
+async function runAdapterChatManaged(session, text) {
+  conversation.addUserMessage(session, text);
+
+  const request = {
+    session_id: session.sessionId,
+    system_prompt: session.systemPrompt,
+    messages: conversation.getMessages(session),
+    tools: session.tools,
+    options: {},
+    _configName: session.configName,
+    _userId: session.userId,
+  };
+
+  try {
+    let maxTurns = 10;
+    while (maxTurns-- > 0) {
+      const currentRequest = { ...request, messages: conversation.getMessages(session) };
+      let hadToolUse = false;
+
+      for await (const event of session.adapter.chat(currentRequest)) {
+        handleAdapterEvent(session, event);
+
+        if (event.type === 'tool_use') {
+          hadToolUse = true;
+          log.info(TAG, `Tool use from adapter: ${event.name}`);
+          const toolLabel = profile.toolLabels?.[`mcp__1c__${event.name}`] || event.name;
+          centrifugo.apiPublish(session.channel, {
+            type: 'tool_status', tool: `mcp__1c__${event.name}`, description: toolLabel,
+          }).catch(() => {});
+
+          const toolResult = await executeTool(session, event, {
+            centrifugo,
+            toolCallTimeout: config.toolCallTimeout,
+          });
+
+          conversation.addToolUse(session, { id: event.id, name: event.name, input: event.input });
+          conversation.addToolResult(session, event.id, toolResult.content, toolResult.isError);
+          log.info(TAG, `Tool result received, continuing with model...`);
+          break;
+        }
+
+        if (event.type === 'assistant_end') {
+          conversation.addAssistantMessage(session, event.text);
+          billingProcessEvent(session, event, centrifugo);
+          hadToolUse = false;
+          break;
+        }
+      }
+
+      if (!hadToolUse) break;
+    }
+  } catch (err) {
+    log.error(TAG, `Adapter error: ${err.message} ${err.stack || ''}`);
+    centrifugo.apiPublish(session.channel, { type: 'error', message: 'Ошибка модели' });
+  }
+}
+
+// Subflow B: Adapter manages history (codex-cli, claude-cli as adapter)
+async function runAdapterChatPassthrough(session, text) {
+  const request = {
+    session_id: session.sessionId,
+    system_prompt: session.systemPrompt,
+    messages: [{ role: 'user', content: text }],
+    tools: session.tools,
+    options: {},
+    _configName: session.configName,
+    _userId: session.userId,
+  };
+
+  try {
+    for await (const event of session.adapter.chat(request)) {
+      handleAdapterEvent(session, event);
+
+      if (event.type === 'assistant_end') {
+        billingProcessEvent(session, event, centrifugo);
+        break;
+      }
+    }
+  } catch (err) {
+    log.error(TAG, `Adapter error: ${err.message} ${err.stack || ''}`);
+    centrifugo.apiPublish(session.channel, { type: 'error', message: 'Ошибка модели' });
   }
 }
 
@@ -755,6 +797,12 @@ function handleAdapterEvent(session, event) {
       return;
     }
     if (event.type !== 'tool_status') return;
+  }
+
+  // Suppress — don't publish, only write history
+  if (event._suppress) {
+    writeHistory(session, 'out', { ...event, _suppressed: true });
+    return;
   }
 
   // Sanitize
@@ -778,92 +826,6 @@ function handleAdapterEvent(session, event) {
     const totalMs = Date.now() - session._chatReceivedTime;
     log.info(TAG, `⏱ SUMMARY: total=${totalMs}ms, session=${session.sessionId}`);
   }
-
-  // Balance
-  if (event.type === 'assistant_end' && event.cost_usd && session.userId) {
-    const newBalance = deductBalance(session.userId, event.cost_usd, session.sessionId);
-    centrifugo.apiPublish(session.channel, {
-      type: 'balance_update', session_id: session.sessionId,
-      balance: newBalance, currency: 'руб',
-    });
-    log.info(TAG, `💰 Balance: -${event.cost_usd}$ → ${newBalance} руб`);
-  }
-
-  // Save assistant response to history
-  if (event.type === 'assistant_end') {
-    session.messages.push({ role: 'assistant', content: event.text });
-  }
-}
-
-function extractMcpText(mcpResult) {
-  if (!mcpResult?.content) return JSON.stringify(mcpResult);
-  return mcpResult.content
-    .filter(c => c.type === 'text')
-    .map(c => c.text)
-    .join('\n') || JSON.stringify(mcpResult);
-}
-
-async function executeToolCall(session, toolUse) {
-  log.info(TAG, `🔧 Tool call: ${toolUse.name} (session ${session.sessionId})`);
-
-  // Memory tools — execute locally (no Centrifugo needed)
-  if (toolUse.name.startsWith('lyra_memory_')) {
-    try {
-      const { handleMemoryTool } = await import('./memory.mjs');
-      const result = handleMemoryTool(toolUse.name, toolUse.input, {
-        configName: session.configName,
-        userId: session.userId,
-        dbId: session.dbId,
-        dbName: session.dbName,
-      });
-      return { result };
-    } catch (err) {
-      return { error: err.message };
-    }
-  }
-
-  // MCP tools — Vega (search_code, search_metadata, search_metadata_by_description)
-  const vegaTools = ['search_code', 'search_metadata', 'search_metadata_by_description'];
-  if (vegaTools.includes(toolUse.name) && session.mcpServers?.vega) {
-    const { url, headers } = session.mcpServers.vega;
-    log.info(TAG, `🔧 MCP→Vega: ${toolUse.name}`);
-    const result = await mcpCallTool(url, toolUse.name, toolUse.input, headers);
-    return result.error ? { error: result.error } : { result: extractMcpText(result) };
-  }
-
-  // MCP tools — mcp-1c-docs (search_docs, fetch_url, list_libraries)
-  const docsTools = ['search_docs', 'fetch_url', 'list_libraries'];
-  if (docsTools.includes(toolUse.name) && session.mcpServers?.docs) {
-    const { url, headers } = session.mcpServers.docs;
-    log.info(TAG, `🔧 MCP→docs: ${toolUse.name}`);
-    const result = await mcpCallTool(url, toolUse.name, toolUse.input, headers);
-    return result.error ? { error: result.error } : { result: extractMcpText(result) };
-  }
-
-  // Client tools — via Centrifugo → Chat 1С
-
-  const requestId = randomUUID();
-  centrifugo.apiPublish(session.channel, {
-    type: 'tool_call',
-    request_id: requestId,
-    tool: toolUse.name,
-    params: toolUse.input,
-  });
-
-  // Wait for tool_result (reuse existing tools.mjs mechanism)
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      session.pendingToolCalls?.delete(requestId);
-      reject(new Error(`Tool timeout: ${toolUse.name}`));
-    }, 30000);
-
-    if (!session.pendingToolCalls) session.pendingToolCalls = new Map();
-    session.pendingToolCalls.set(requestId, {
-      resolve: (data) => { clearTimeout(timeout); resolve(data); },
-      reject: (err) => { clearTimeout(timeout); reject(err); },
-      timer: timeout,
-    });
-  });
 }
 
 // --- Spawn Claude (CLI) ---
@@ -923,16 +885,7 @@ function spawnClaudeForSession(session, initialMessage, { resume = false } = {})
       }
 
       // Deduct balance after each response
-      if (event.type === 'assistant_end' && event.cost_usd && session.userId) {
-        const newBalance = deductBalance(session.userId, event.cost_usd, session.sessionId);
-        centrifugo.apiPublish(session.channel, {
-          type: 'balance_update',
-          session_id: session.sessionId,
-          balance: newBalance,
-          currency: 'руб',
-        });
-        log.info(TAG, `💰 Balance: -${event.cost_usd}$ → ${newBalance} руб (user=${session.userId})`);
-      }
+      billingProcessEvent(session, event, centrifugo);
 
       // After assistant_end, hint to save knowledge if response was expensive
       if (event.type === 'assistant_end' && event._turnMs > 30000 && event._turnToolCount > 3 && event._turnResearchTools) {

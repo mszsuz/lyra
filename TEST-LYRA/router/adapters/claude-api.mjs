@@ -18,6 +18,8 @@ export class ClaudeApiAdapter {
       thinking: true,
       max_context_tokens: 200000,
       max_output_tokens: 64000,
+      history_mode: 'router',
+      tool_mode: 'router',
     };
   }
 
@@ -93,6 +95,12 @@ export class ClaudeApiAdapter {
         content: msg.content,
         is_error: msg.is_error || false,
       }];
+      return result;
+    }
+
+    // Assistant with tool_use content blocks — pass through as-is for Anthropic API
+    if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+      result.content = msg.content;
       return result;
     }
 

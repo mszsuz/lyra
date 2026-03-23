@@ -24,18 +24,27 @@ function readRegistry(dir) {
   return readFileSync(p, 'utf-8').trim();
 }
 
-function updateRegistry(dir, name, description) {
+function validateName(name) {
+  if (!name) throw new Error('Не указано имя знания');
+  if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(name) && !/^[a-z0-9]$/.test(name)) {
+    throw new Error('Имя знания должно содержать только латинские буквы, цифры и дефисы');
+  }
+}
+
+function updateRegistry(dir, name, description, dbName) {
   const registryPath = resolve(dir, 'registry.md');
   let lines = [];
   if (existsSync(registryPath)) {
     lines = readFileSync(registryPath, 'utf-8').split('\n').filter(l => l.trim() !== '');
   }
-  const existing = lines.findIndex(l => l.includes(`**${name}**`));
-  const entry = `- **${name}** — ${description}`;
-  if (existing >= 0) {
-    lines[existing] = entry;
+  const prefix = `- **${name}** — `;
+  const dbSuffix = dbName ? ` [${dbName}]` : '';
+  const newLine = `${prefix}${description}${dbSuffix}`;
+  const idx = lines.findIndex(l => l.startsWith(prefix));
+  if (idx >= 0) {
+    lines[idx] = newLine;
   } else {
-    lines.push(entry);
+    lines.push(newLine);
   }
   writeFileSync(registryPath, lines.join('\n') + '\n', 'utf-8');
 }
@@ -56,7 +65,7 @@ export function handleMemoryTool(toolName, args, ctx) {
 
   if (toolName === 'lyra_memory_read') {
     const name = args.name;
-    if (!name) throw new Error('Не указано имя знания');
+    validateName(name);
     const parts = [];
     const globalPath = resolve(globalMemoryDir(configName), 'skills', `${name}.md`);
     if (existsSync(globalPath)) parts.push(readFileSync(globalPath, 'utf-8'));
@@ -71,11 +80,12 @@ export function handleMemoryTool(toolName, args, ctx) {
   if (toolName === 'lyra_memory_save') {
     const { name, description, content } = args;
     if (!name || !description || !content) throw new Error('Необходимы name, description и content');
+    validateName(name);
     const dir = userMemoryDir(configName, userId);
     const skillPath = resolve(dir, 'skills', `${name}.md`);
     const meta = `---\ndb_id: ${dbId || 'unknown'}\ndb_name: ${dbName || 'unknown'}\nsaved: ${new Date().toISOString()}\n---\n\n`;
     writeFileSync(skillPath, meta + content, 'utf-8');
-    updateRegistry(dir, name, description);
+    updateRegistry(dir, name, description, dbName);
     return `Знание "${name}" сохранено.`;
   }
 

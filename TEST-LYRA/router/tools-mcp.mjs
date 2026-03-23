@@ -6,9 +6,9 @@
 // Zero dependencies — Node.js 22+
 
 import { createInterface } from 'node:readline';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { handleMemoryTool as _handleMemoryTool } from './memory.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -88,10 +88,15 @@ rl.on('line', async (line) => {
     // Напарник — goes through Centrifugo → Chat EPF (HTML/JS fetch to code.1c.ai)
     // Token is per-user, stored in Chat after auth
 
-    // Memory tools — handle locally (no HTTP roundtrip)
+    // Memory tools — handle locally via shared memory.mjs (no HTTP roundtrip)
     if (toolName.startsWith('lyra_memory_')) {
       try {
-        const result = handleMemoryTool(toolName, toolArgs);
+        const result = _handleMemoryTool(toolName, toolArgs, {
+          configName: CONFIG_NAME,
+          userId: USER_ID,
+          dbId: DB_ID,
+          dbName: DB_NAME,
+        });
         respond(id, { content: [{ type: 'text', text: result }] });
       } catch (err) {
         respond(id, { content: [{ type: 'text', text: err.message }], isError: true });
@@ -128,109 +133,6 @@ rl.on('line', async (line) => {
 });
 
 rl.on('close', () => process.exit(0));
-
-// --- Memory tools (local filesystem) ---
-// Общая память: <dataDir>/memory/<config>/  (read-only для пользователей)
-// Личная память: <dataDir>/users/<user_id>/memory/<config>/  (read-write)
-const DATA_DIR = process.env.LYRA_DATA_DIR || __dirname;
-
-function globalMemoryDir() {
-  if (!CONFIG_NAME) throw new Error('Конфигурация не определена — память недоступна');
-  return resolve(DATA_DIR, 'memory', CONFIG_NAME);
-}
-
-function userMemoryDir() {
-  if (!CONFIG_NAME) throw new Error('Конфигурация не определена — память недоступна');
-  if (!USER_ID) throw new Error('Пользователь не определён — память недоступна');
-  const dir = resolve(DATA_DIR, 'users', USER_ID, 'memory', CONFIG_NAME);
-  mkdirSync(resolve(dir, 'skills'), { recursive: true });
-  return dir;
-}
-
-function readRegistry(dir) {
-  const p = resolve(dir, 'registry.md');
-  if (!existsSync(p)) return '';
-  return readFileSync(p, 'utf-8').trim();
-}
-
-function handleMemoryTool(toolName, args) {
-  if (toolName === 'lyra_memory_list') {
-    const globalReg = readRegistry(globalMemoryDir());
-    let userReg = '';
-    try { userReg = readRegistry(userMemoryDir()); } catch {}
-
-    const parts = [];
-    if (globalReg) parts.push('## Общая база знаний\n' + globalReg);
-    if (userReg) parts.push('## Мои знания\n' + userReg);
-    if (!parts.length) return 'Память пуста — знаний по этой конфигурации ещё нет.';
-    return parts.join('\n\n');
-  }
-
-  if (toolName === 'lyra_memory_read') {
-    const name = args.name;
-    if (!name) throw new Error('Не указано имя знания');
-    if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(name) && !/^[a-z0-9]$/.test(name)) {
-      throw new Error('Имя знания должно содержать только латинские буквы, цифры и дефисы');
-    }
-
-    // Общее + пользовательское (пользовательское переопределяет общее)
-    const parts = [];
-
-    const globalPath = resolve(globalMemoryDir(), 'skills', `${name}.md`);
-    if (existsSync(globalPath)) parts.push(readFileSync(globalPath, 'utf-8'));
-
-    try {
-      const userPath = resolve(userMemoryDir(), 'skills', `${name}.md`);
-      if (existsSync(userPath)) parts.push('---\n## Пользовательские дополнения\n' + readFileSync(userPath, 'utf-8'));
-    } catch {}
-
-    if (!parts.length) throw new Error(`Знание "${name}" не найдено`);
-    return parts.join('\n\n');
-  }
-
-  if (toolName === 'lyra_memory_save') {
-    const { name, description, content } = args;
-    if (!name || !description || !content) throw new Error('Необходимы name, description и content');
-    if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(name) && !/^[a-z0-9]$/.test(name)) {
-      throw new Error('Имя должно содержать только латинские буквы, цифры и дефисы (например: debitorka-query)');
-    }
-
-    // Сохраняем только в личную папку
-    const dir = userMemoryDir();
-    const skillPath = resolve(dir, 'skills', `${name}.md`);
-    // Добавляем метаданные в начало файла
-    const meta = `---\ndb_id: ${DB_ID || 'unknown'}\ndb_name: ${DB_NAME || 'unknown'}\nsaved: ${new Date().toISOString()}\n---\n\n`;
-    writeFileSync(skillPath, meta + content, 'utf-8');
-    updateRegistry(dir, name, description);
-
-    log(`memory saved: ${USER_ID}/${CONFIG_NAME}/${name} (${content.length} chars)`);
-    return `Знание "${name}" сохранено в вашу личную базу. Доступно в будущих сессиях для конфигурации ${CONFIG_NAME}.`;
-  }
-
-  throw new Error(`Неизвестный инструмент памяти: ${toolName}`);
-}
-
-function updateRegistry(dir, name, description) {
-  const registryPath = resolve(dir, 'registry.md');
-  let lines = [];
-
-  if (existsSync(registryPath)) {
-    lines = readFileSync(registryPath, 'utf-8').split('\n').filter(l => l.trim() !== '');
-  }
-
-  const prefix = `- **${name}** — `;
-  const dbSuffix = DB_NAME ? ` [${DB_NAME}]` : (DB_ID ? ` [${DB_ID.slice(0, 8)}]` : '');
-  const newLine = `${prefix}${description}${dbSuffix}`;
-  const idx = lines.findIndex(l => l.startsWith(prefix));
-
-  if (idx >= 0) {
-    lines[idx] = newLine;
-  } else {
-    lines.push(newLine);
-  }
-
-  writeFileSync(registryPath, lines.join('\n') + '\n', 'utf-8');
-}
 
 // --- HTTP communication with Router ---
 
