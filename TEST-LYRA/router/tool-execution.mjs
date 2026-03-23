@@ -11,6 +11,36 @@ const TAG = 'tool-exec';
 const VEGA_TOOLS = ['search_code', 'search_metadata', 'search_metadata_by_description'];
 const DOCS_TOOLS = ['search_docs', 'fetch_url', 'list_libraries'];
 
+/**
+ * Vega expects `query` as a JSON string with `op` field.
+ * Models often send plain text — wrap it into the correct JSON format.
+ */
+function normalizeVegaArgs(toolName, input) {
+  const query = input?.query;
+  if (!query) return input;
+
+  // Already valid JSON with op — pass through
+  try {
+    const parsed = JSON.parse(query);
+    if (parsed.op) return input;
+  } catch {}
+
+  // Plain text → wrap into default op
+  let wrapped;
+  if (toolName === 'search_metadata') {
+    wrapped = JSON.stringify({ op: 'list_objects_by_name', name: query, match: 'contains' });
+  } else if (toolName === 'search_metadata_by_description') {
+    wrapped = JSON.stringify({ op: 'search_metadata_by_description', text: query });
+  } else if (toolName === 'search_code') {
+    wrapped = JSON.stringify({ op: 'find_routines_by_description', text: query });
+  } else {
+    return input;
+  }
+
+  log.info(TAG, `Vega query normalized: "${query}" → ${wrapped}`);
+  return { ...input, query: wrapped };
+}
+
 function extractMcpText(mcpResult) {
   if (!mcpResult?.content) return JSON.stringify(mcpResult);
   return mcpResult.content
@@ -48,7 +78,8 @@ export async function executeTool(session, toolUse, { centrifugo, toolCallTimeou
   if (VEGA_TOOLS.includes(toolUse.name) && session.mcpServers?.vega) {
     const { url, headers } = session.mcpServers.vega;
     log.info(TAG, `MCP→Vega: ${toolUse.name}`);
-    const result = await mcpCallTool(url, toolUse.name, toolUse.input, headers);
+    const vegaInput = normalizeVegaArgs(toolUse.name, toolUse.input);
+    const result = await mcpCallTool(url, toolUse.name, vegaInput, headers);
     if (result.error) return { content: String(result.error), isError: true };
     return { content: extractMcpText(result), isError: false };
   }
