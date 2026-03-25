@@ -7,6 +7,12 @@
     "path": "claude",
     "model": "sonnet"
   },
+  "adapter": "openai",
+  "adapterConfig": {
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_key": "env:OPENROUTER_API_KEY",
+    "model": "openai/gpt-5.4"
+  },
   "toolCallTimeout": {
     "default": 30000,
     "lyra_ask_naparnik": 300000
@@ -16,10 +22,20 @@
   "logLevel": "debug",
   "sessionTTL": 14400000,
   "sessionWarningBefore": 300000,
+  "exchangeRate": 100,
+  "maxToolTurns": 15,
+  "billingMultiplier": 3,
   "dataDir": "..",
+  "adapterTimeout": {
+    "chunkTimeout": 60000,
+    "connectTimeout": 15000,
+    "maxRetries": 1
+  },
   "rag": {
     "enabled": true,
-    "model": "google/gemini-2.0-flash-lite-001",
+    "model": "google/gemini-2.5-flash-lite",
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_key": "env:OPENROUTER_API_KEY",
     "timeout": 5000
   }
 }

@@ -752,7 +752,7 @@ async function runAdapterChatManaged(session, text) {
   };
 
   let accumulatedCostUsd = 0;
-  const maxToolTurns = 10;
+  const maxToolTurns = config.maxToolTurns || 15;
   const maxRetries = config.adapterTimeout.maxRetries;
   let toolTurnCount = 0;
 
@@ -760,14 +760,20 @@ async function runAdapterChatManaged(session, text) {
     // Outer loop: semantic turns (tool calls + final answer)
     while (true) {
       const toolsExhausted = toolTurnCount >= maxToolTurns;
-      const currentRequest = {
-        ...request,
-        messages: conversation.getMessages(session),
-        tools: toolsExhausted ? [] : request.tools,
-      };
+      const currentMessages = conversation.getMessages(session);
       if (toolsExhausted) {
+        // Подсказка модели: дать финальный ответ без повтора
+        currentMessages.push({
+          role: 'user',
+          content: 'Инструменты больше недоступны. Дай краткий финальный ответ на основе уже полученных данных. Не повторяй то, что уже написал выше.',
+        });
         log.warn(TAG, `Tool limit (${maxToolTurns}) reached, final request without tools, session ${session.sessionId}`);
       }
+      const currentRequest = {
+        ...request,
+        messages: currentMessages,
+        tools: toolsExhausted ? [] : request.tools,
+      };
 
       let pendingTools = [];
       let turnSuccess = false;
