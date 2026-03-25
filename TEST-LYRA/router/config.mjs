@@ -28,6 +28,14 @@ function loadJSON(path) {
   return JSON.parse(readFileSync(path, 'utf-8').replace(/^\uFEFF/, ''));
 }
 
+/** Resolve "env:VAR_NAME" → process.env.VAR_NAME, otherwise return as-is */
+function resolveEnv(value) {
+  if (typeof value === 'string' && value.startsWith('env:')) {
+    return process.env[value.slice(4)] || '';
+  }
+  return value || '';
+}
+
 export function loadConfig() {
   // Try Router/config.json first
   let raw;
@@ -46,32 +54,45 @@ export function loadConfig() {
 
   const config = {
     centrifugo: {
-      wsUrl: raw.centrifugo?.wsUrl || 'ws://localhost:11000/connection/websocket',
-      apiUrl: raw.centrifugo?.apiUrl || 'http://localhost:11000/api',
+      wsUrl: raw.centrifugo?.wsUrl || '',
+      apiUrl: raw.centrifugo?.apiUrl || '',
       hmacSecret: raw.centrifugo?.hmacSecret || centrifugoConfig?.client?.token?.hmac_secret_key || '',
       apiKey: raw.centrifugo?.apiKey || centrifugoConfig?.http_api?.key || '',
     },
     naparnik: {
-      url: raw.naparnik?.url || 'http://localhost:8000/mcp',
-      token: raw.naparnik?.token || process.env.ONEC_AI_TOKEN || '',
+      url: raw.naparnik?.url || '',
+      token: resolveEnv(raw.naparnik?.token),
     },
     claude: {
-      path: raw.claude?.path || process.env.CLAUDE_PATH || 'claude',
-      model: raw.claude?.model || 'sonnet',
+      path: raw.claude?.path || '',
+      model: raw.claude?.model || '',
     },
     toolCallTimeout: typeof raw.toolCallTimeout === 'object'
-      ? { default: 30_000, ...raw.toolCallTimeout }
-      : { default: raw.toolCallTimeout || 30_000 },
+      ? { default: 0, ...raw.toolCallTimeout }
+      : { default: raw.toolCallTimeout || 0 },
     toolsPort: raw.toolsPort || 0,
-    profilePath: raw.profilePath || './profiles/default',
+    profilePath: raw.profilePath || '',
     logLevel: raw.logLevel || 'info',
-    sessionTTL: raw.sessionTTL || 30 * 60 * 1000, // 30 min
+    sessionTTL: raw.sessionTTL || 0,
+    exchangeRate: raw.exchangeRate ?? 100,
+    billingMultiplier: raw.billingMultiplier ?? 1,
     rag: {
       enabled: raw.rag?.enabled ?? false,
-      model: raw.rag?.model || 'google/gemini-2.0-flash-lite-001',
-      base_url: raw.rag?.base_url || raw.adapters?.openai?.base_url || 'https://openrouter.ai/api/v1',
-      api_key: raw.rag?.api_key || raw.adapters?.openai?.api_key || process.env.OPENROUTER_API_KEY || '',
-      timeout: raw.rag?.timeout || 3000,
+      model: raw.rag?.model || '',
+      base_url: raw.rag?.base_url || '',
+      api_key: resolveEnv(raw.rag?.api_key),
+      timeout: raw.rag?.timeout || 0,
+    },
+    adapterTimeout: {
+      chunkTimeout:   raw.adapterTimeout?.chunkTimeout   || 0,
+      connectTimeout: raw.adapterTimeout?.connectTimeout  || 0,
+      maxRetries:     raw.adapterTimeout?.maxRetries      ?? 0,
+    },
+    adapter: raw.adapter || '',
+    adapterConfig: {
+      base_url: raw.adapterConfig?.base_url || '',
+      api_key: resolveEnv(raw.adapterConfig?.api_key),
+      model: raw.adapterConfig?.model || '',
     },
     adapters: raw.adapters || {},
     dataDir,

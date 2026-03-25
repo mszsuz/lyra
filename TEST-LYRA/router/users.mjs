@@ -38,19 +38,29 @@ export function checkBalance(userId) {
   return { ok: balance > 0, balance };
 }
 
-export function deductBalance(userId, costUsd, sessionId) {
+let usdToRub = 100;
+
+export function setExchangeRate(rate) {
+  usdToRub = rate;
+}
+
+export function deductBalance(userId, costUsd, sessionId, providerCostUsd) {
   const profile = getProfile(userId);
   if (profile.balance === undefined) profile.balance = INITIAL_BALANCE;
-  const costRub = Math.round(costUsd * 100 * 100) / 100; // USD → RUB, approximate
+  const costRub = Math.round(costUsd * usdToRub * 100) / 100;
   profile.balance = Math.round((profile.balance - costRub) * 100) / 100;
   saveProfile(userId, profile);
-  writeTransaction(userId, {
+  const tx = {
     type: 'debit',
     amount: -costRub,
     balance: profile.balance,
     cost_usd: costUsd,
     session_id: sessionId,
-  });
+  };
+  if (providerCostUsd != null && providerCostUsd !== costUsd) {
+    tx.provider_cost_usd = providerCostUsd;
+  }
+  writeTransaction(userId, tx);
   return profile.balance;
 }
 
@@ -178,8 +188,6 @@ export function getUserConfig(userId, baseIds) {
     naparnikToken: profile.naparnik_token || '',
     userName: profile.user_name || '',
     userLevel: profile.user_level || '',
-    adapter: profile.adapter || '',
-    adapterConfig: profile.adapter_config || {},
   };
 
   // Find database in registry by base_ids

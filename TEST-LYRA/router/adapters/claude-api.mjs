@@ -1,7 +1,11 @@
 // Claude API adapter — direct HTTP to Anthropic API (zero npm dependencies)
 
+import * as log from '../log.mjs';
+import { readSSEWithTimeout, AdapterTimeoutError } from './sse-reader.mjs';
+
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const API_VERSION = '2023-06-01';
+const TAG = 'claude-api';
 
 export class ClaudeApiAdapter {
   #apiKey;
@@ -25,28 +29,84 @@ export class ClaudeApiAdapter {
 
   async *chat(request) {
     const body = this.#buildRequestBody(request);
+    const chunkTimeout = request.options?.chunkTimeout || 60_000;
+    const connectTimeout = request.options?.connectTimeout || 15_000;
 
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': request.api_key || this.#apiKey,
-        'anthropic-version': API_VERSION,
-      },
-      body: JSON.stringify(body),
-    });
+    const controller = new AbortController();
+    this._currentAbort = controller;
+    this._abortReason = null;
+
+    const connectTimer = setTimeout(() => {
+      this._abortReason = 'timeout';
+      controller.abort();
+    }, connectTimeout);
+
+    let res;
+    try {
+      res = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': request.api_key || this.#apiKey,
+          'anthropic-version': API_VERSION,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      clearTimeout(connectTimer);
+      this._currentAbort = null;
+      if (err.name === 'AbortError') {
+        if (this._abortReason === 'user_abort') {
+          yield { type: 'error', code: 'user_abort', message: 'Aborted by user', retryable: false };
+        } else {
+          yield { type: 'error', code: 'adapter_timeout', stage: 'connect',
+                  message: `Connect timeout (${connectTimeout}ms)`, retryable: true };
+        }
+        return;
+      }
+      yield { type: 'error', code: 'adapter_timeout', stage: 'connect',
+              message: err.message, retryable: true };
+      return;
+    }
+    clearTimeout(connectTimer);
 
     if (!res.ok) {
+      this._currentAbort = null;
       const errorText = await res.text();
       yield { type: 'error', message: `API error ${res.status}: ${errorText}`, code: 'api_error', retryable: res.status >= 500 };
       return;
     }
 
-    yield* this.#parseSSE(res.body, request);
+    try {
+      yield* this.#parseSSE(res.body, request, chunkTimeout, controller.signal);
+    } catch (err) {
+      if (err instanceof AdapterTimeoutError) {
+        yield { type: 'error', code: 'adapter_timeout', stage: 'chunk',
+                message: err.message, retryable: true };
+        return;
+      }
+      if (err.name === 'AbortError') {
+        if (this._abortReason === 'user_abort') {
+          yield { type: 'error', code: 'user_abort', message: 'Aborted by user', retryable: false };
+        } else {
+          yield { type: 'error', code: 'adapter_timeout', stage: 'chunk',
+                  message: 'Stream aborted', retryable: true };
+        }
+        return;
+      }
+      throw err;
+    } finally {
+      this._currentAbort = null;
+    }
   }
 
   async abort(sessionId) {
-    // API doesn't support abort — client just stops reading the stream
+    if (this._currentAbort) {
+      this._abortReason = 'user_abort';
+      this._currentAbort.abort();
+      this._currentAbort = null;
+    }
     return { ok: true };
   }
 
@@ -125,8 +185,7 @@ export class ClaudeApiAdapter {
     return result;
   }
 
-  async *#parseSSE(body, request) {
-    const decoder = new TextDecoder();
+  async *#parseSSE(body, request, chunkTimeout, signal) {
     let buffer = '';
     let fullText = '';
     let inputTokens = 0;
@@ -135,9 +194,10 @@ export class ClaudeApiAdapter {
     let cacheWrite = 0;
     let model = this.#model;
     let stopReason = '';
+    let currentToolUse = null;
 
-    for await (const chunk of body) {
-      buffer += decoder.decode(chunk, { stream: true });
+    for await (const text of readSSEWithTimeout(body, chunkTimeout, signal)) {
+      buffer += text;
 
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
@@ -172,8 +232,7 @@ export class ClaudeApiAdapter {
             yield { type: 'thinking_start' };
           }
           if (block?.type === 'tool_use') {
-            // Tool use starts — accumulate input
-            event._toolUse = { id: block.id, name: block.name, input: '' };
+            currentToolUse = { id: block.id, name: block.name, input: '' };
           }
         }
 
@@ -187,31 +246,24 @@ export class ClaudeApiAdapter {
             yield { type: 'thinking_delta', text: delta.thinking };
           }
           if (delta?.type === 'input_json_delta') {
-            // Accumulate tool input JSON
-            if (this._currentToolUse) {
-              this._currentToolUse.input += delta.partial_json;
+            if (currentToolUse) {
+              currentToolUse.input += delta.partial_json;
             }
           }
         }
 
-        if (eventType === 'content_block_start' && event.content_block?.type === 'tool_use') {
-          this._currentToolUse = { id: event.content_block.id, name: event.content_block.name, input: '' };
-        }
-
         if (eventType === 'content_block_stop') {
-          if (this._currentToolUse) {
+          if (currentToolUse) {
             let input = {};
-            try { input = JSON.parse(this._currentToolUse.input); } catch {}
+            try { input = JSON.parse(currentToolUse.input); } catch {}
             yield {
               type: 'tool_use',
-              id: this._currentToolUse.id,
-              name: this._currentToolUse.name,
+              id: currentToolUse.id,
+              name: currentToolUse.name,
               input,
             };
-            this._currentToolUse = null;
+            currentToolUse = null;
           }
-          // Check if it was thinking block
-          // (thinking_end after thinking content_block_stop)
         }
 
         if (eventType === 'message_delta') {
@@ -223,7 +275,6 @@ export class ClaudeApiAdapter {
         }
 
         if (eventType === 'message_stop') {
-          // Calculate cost
           const costUsd = this.#calculateCost(model, inputTokens, outputTokens, cacheRead, cacheWrite);
 
           yield {

@@ -13,7 +13,7 @@ import { createToolServer, handleToolResult } from './tools.mjs';
 import { verifyAuth, checkBalance, getUserConfig, saveUserSettings } from './users.mjs';
 import { sanitizeText } from './protocol.mjs';
 import { executeTool } from './tool-execution.mjs';
-import { processEvent as billingProcessEvent } from './billing.mjs';
+import { processEvent as billingProcessEvent, billAccumulatedCost, initBilling } from './billing.mjs';
 import * as conversation from './conversation.mjs';
 import { findRelevantLinks, warmup as ragWarmup } from './rag.mjs';
 import { writeHistory, moveSessionToUser } from './history.mjs';
@@ -73,6 +73,7 @@ writePidFile();
 // --- Load config and profile ---
 
 const config = loadConfig();
+initBilling(config);
 log.setLevel(config.logLevel);
 log.setLogFile(resolve(config.dataDir, 'var', 'router.log'));
 log.info(TAG, 'Starting Lyra Router');
@@ -327,6 +328,7 @@ function handleChat(session, data) {
   // Adapter-based session
   if (session.adapter) {
     if (session.streaming) {
+      session._aborted = true;
       session.pendingMessage = text;
       session.adapter.abort(session.sessionId);
       return;
@@ -402,7 +404,7 @@ async function handleAuth(session, data) {
 
     // Spawn model if not already running
     if (!session.claudeProcess && !session.adapter) {
-      const adapterName = userConfig.adapter || config.claude.adapter || 'claude-cli';
+      const adapterName = config.adapter || config.claude.adapter || 'claude-cli';
       if (adapterName === 'claude-cli') {
         spawnClaudeForSession(session);
       } else {
@@ -424,7 +426,20 @@ async function handleAuth(session, data) {
 
 function handleAbort(session) {
   log.info(TAG, `abort: session=${session.sessionId}`);
+
+  // Adapter-based sessions
+  if (session.adapter && session.streaming) {
+    session._aborted = true;
+    session.adapter.abort(session.sessionId);
+    const abortEnd = { type: 'assistant_end', text: '', aborted: true };
+    centrifugo.apiPublish(session.channel, abortEnd);
+    writeHistory(session, 'out', abortEnd);
+    return;
+  }
+
+  // CLI-based sessions
   if (session.streaming && session._abort) {
+    session._aborted = true;
     session._abort();
     const abortEnd = { type: 'assistant_end', text: '', aborted: true };
     centrifugo.apiPublish(session.channel, abortEnd);
@@ -604,15 +619,11 @@ setInterval(() => {
 async function startAdapterSession(session, adapterName) {
   profile = loadProfile(config.profilePath);
 
-  // Read adapter config from user profile or router config
-  const userConfig = getUserConfig(session.userId, session.baseIds);
-  const userAdapterConfig = userConfig.adapterConfig || {};
-  const routerAdapterConfig = config.adapters?.[adapterName] || {};
-
+  // Adapter config from router config (operator-level, not per-user)
   const adapterConfig = {
-    base_url: userAdapterConfig.base_url || routerAdapterConfig.base_url || '',
-    api_key: userAdapterConfig.api_key || routerAdapterConfig.api_key || process.env.ANTHROPIC_API_KEY || '',
-    model: userAdapterConfig.model || routerAdapterConfig.model || config.claude?.model || 'claude-sonnet-4-6',
+    base_url: config.adapterConfig.base_url,
+    api_key: config.adapterConfig.api_key,
+    model: config.adapterConfig.model,
   };
 
   const { adapter, capabilities } = await createAdapter(adapterName, adapterConfig);
@@ -682,6 +693,7 @@ function buildSessionTools(profile, session) {
 
 async function runAdapterChat(session, text) {
   session.streaming = true;
+  session._aborted = false;
   session._chatReceivedTime = Date.now();
 
   // Set env vars for codex-cli adapter (MCP tools-mcp.mjs needs these via env_vars forwarding)
@@ -731,66 +743,170 @@ async function runAdapterChatManaged(session, text) {
     system_prompt: session.systemPrompt,
     messages: conversation.getMessages(session),
     tools: session.tools,
-    options: {},
+    options: {
+      chunkTimeout: config.adapterTimeout.chunkTimeout,
+      connectTimeout: config.adapterTimeout.connectTimeout,
+    },
     _configName: session.configName,
     _userId: session.userId,
   };
 
   let accumulatedCostUsd = 0;
+  const maxToolTurns = 10;
+  const maxRetries = config.adapterTimeout.maxRetries;
+  let toolTurnCount = 0;
 
   try {
-    let maxTurns = 10;
-    while (maxTurns-- > 0) {
-      const currentRequest = { ...request, messages: conversation.getMessages(session) };
-      let pendingTools = [];
-
-      for await (const event of session.adapter.chat(currentRequest)) {
-        if (event.type === 'tool_use') {
-          pendingTools.push(event);
-          log.info(TAG, `Tool use from adapter: ${event.name}`);
-          const toolKey = resolveToolKey(event.name, session);
-          const toolLabel = profile.toolLabels?.[toolKey] || event.name;
-          centrifugo.apiPublish(session.channel, {
-            type: 'tool_status', tool: toolKey, description: toolLabel,
-          }).catch(() => {});
-          continue; // don't break — wait for assistant_end with cost
-        }
-
-        if (event.type === 'assistant_end') {
-          if (pendingTools.length > 0) {
-            // Tool turn — don't publish to client, accumulate cost, execute tools
-            accumulatedCostUsd += event.cost_usd || 0;
-            for (const tu of pendingTools) {
-              const toolResult = await executeTool(session, tu, {
-                centrifugo,
-                toolCallTimeout: config.toolCallTimeout,
-              });
-              conversation.addToolUse(session, { id: tu.id, name: tu.name, input: tu.input });
-              conversation.addToolResult(session, tu.id, toolResult.content, toolResult.isError);
-            }
-            log.info(TAG, `Tool results received (${pendingTools.length} tools, accumulated cost: $${accumulatedCostUsd.toFixed(4)}), continuing...`);
-          } else {
-            // Final answer — include accumulated cost from all turns
-            if (accumulatedCostUsd > 0) {
-              event.cost_usd = (event.cost_usd || 0) + accumulatedCostUsd;
-              event.cost_rub = Math.round(event.cost_usd * 100 * 100) / 100;
-            }
-            handleAdapterEvent(session, event);
-            conversation.addAssistantMessage(session, event.text);
-            billingProcessEvent(session, event, centrifugo);
-          }
-          break;
-        }
-
-        // Forward other events (text_delta, tool_status, etc.) to client
-        handleAdapterEvent(session, event);
+    // Outer loop: semantic turns (tool calls + final answer)
+    while (true) {
+      const toolsExhausted = toolTurnCount >= maxToolTurns;
+      const currentRequest = {
+        ...request,
+        messages: conversation.getMessages(session),
+        tools: toolsExhausted ? [] : request.tools,
+      };
+      if (toolsExhausted) {
+        log.warn(TAG, `Tool limit (${maxToolTurns}) reached, final request without tools, session ${session.sessionId}`);
       }
 
-      if (pendingTools.length === 0) break; // No tool calls — done
+      let pendingTools = [];
+      let turnSuccess = false;
+
+      // Inner loop: transport retries for one request
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        pendingTools = [];
+        let gotTimeout = false;
+
+        for await (const event of session.adapter.chat(currentRequest)) {
+          // User abort — silent exit (bill accumulated cost)
+          if (event.type === 'error' && event.code === 'user_abort') {
+            log.info(TAG, `User abort, session ${session.sessionId}`);
+            if (accumulatedCostUsd > 0) billAccumulatedCost(session, accumulatedCostUsd, centrifugo);
+            return;
+          }
+
+          // Adapter timeout — retry or give up
+          if (event.type === 'error' && event.code === 'adapter_timeout' && event.retryable) {
+            if (attempt < maxRetries) {
+              log.warn(TAG, `Adapter timeout [${event.stage}] attempt ${attempt + 1}/${maxRetries + 1}, session ${session.sessionId}`);
+              gotTimeout = true;
+              break;
+            } else {
+              log.error(TAG, `Adapter timeout [${event.stage}] after ${maxRetries + 1} attempts, session ${session.sessionId}`);
+              if (accumulatedCostUsd > 0) billAccumulatedCost(session, accumulatedCostUsd, centrifugo);
+              publishAdapterError(session, 'Ошибка: сервер не ответил вовремя (код 01). Попробуйте повторить.');
+              return;
+            }
+          }
+
+          // Other errors
+          if (event.type === 'error') {
+            log.error(TAG, `Adapter error: ${event.message}`);
+            if (accumulatedCostUsd > 0) billAccumulatedCost(session, accumulatedCostUsd, centrifugo);
+            publishAdapterError(session, 'Ошибка: сервис временно недоступен (код 02). Попробуйте повторить.');
+            return;
+          }
+
+          // Tool use
+          if (event.type === 'tool_use') {
+            pendingTools.push(event);
+            if (session._aborted) continue;
+            log.info(TAG, `Tool use from adapter: ${event.name}`);
+            const toolKey = resolveToolKey(event.name, session);
+            const toolLabel = profile.toolLabels?.[toolKey] || event.name;
+            centrifugo.apiPublish(session.channel, {
+              type: 'tool_status', tool: toolKey, description: toolLabel,
+            }).catch(() => {});
+            continue;
+          }
+
+          // Assistant end
+          if (event.type === 'assistant_end') {
+            turnSuccess = true;
+
+            if (pendingTools.length > 0) {
+              // Guard: tools after limit exhausted — do NOT execute
+              if (toolsExhausted) {
+                log.error(TAG, `Model returned tool_use after tool limit, ignoring tools, session ${session.sessionId}`);
+                if (event.text) {
+                  if (accumulatedCostUsd > 0) {
+                    event.cost_usd = (event.cost_usd || 0) + accumulatedCostUsd;
+                    event.cost_rub = Math.round(event.cost_usd * config.exchangeRate * 100) / 100;
+                  }
+                  handleAdapterEvent(session, event);
+                  conversation.addAssistantMessage(session, event.text);
+                  billingProcessEvent(session, event, centrifugo);
+                } else {
+                  const totalCostUsd = (accumulatedCostUsd || 0) + (event.cost_usd || 0);
+                  if (totalCostUsd > 0) {
+                    billAccumulatedCost(session, totalCostUsd, centrifugo);
+                  }
+                  publishAdapterError(session, 'Ошибка: превышен лимит обращений к данным (код 03). Попробуйте упростить вопрос.');
+                }
+                return;
+              }
+
+              // Normal tool turn — execute tools, accumulate cost
+              accumulatedCostUsd += event.cost_usd || 0;
+              for (const tu of pendingTools) {
+                if (session._aborted) {
+                  log.info(TAG, `Aborted before tool execution, session ${session.sessionId}`);
+                  if (accumulatedCostUsd > 0) billAccumulatedCost(session, accumulatedCostUsd, centrifugo);
+                  return;
+                }
+                const toolResult = await executeTool(session, tu, {
+                  centrifugo,
+                  toolCallTimeout: config.toolCallTimeout,
+                });
+                // Check again after tool execution — abort may have arrived during await
+                if (session._aborted) {
+                  log.info(TAG, `Aborted after tool execution, discarding result, session ${session.sessionId}`);
+                  if (accumulatedCostUsd > 0) billAccumulatedCost(session, accumulatedCostUsd, centrifugo);
+                  return;
+                }
+                conversation.addToolUse(session, { id: tu.id, name: tu.name, input: tu.input });
+                conversation.addToolResult(session, tu.id, toolResult.content, toolResult.isError);
+              }
+              log.info(TAG, `Tool results received (${pendingTools.length} tools, accumulated cost: $${accumulatedCostUsd.toFixed(4)}), continuing...`);
+            } else {
+              // Final answer — skip if aborted (handleAbort already sent terminal event)
+              if (session._aborted) {
+                log.info(TAG, `Aborted, skipping final answer, session ${session.sessionId}`);
+                return;
+              }
+              // Include accumulated cost from all turns
+              if (accumulatedCostUsd > 0) {
+                event.cost_usd = (event.cost_usd || 0) + accumulatedCostUsd;
+                event.cost_rub = Math.round(event.cost_usd * config.exchangeRate * 100) / 100;
+              }
+              handleAdapterEvent(session, event);
+              conversation.addAssistantMessage(session, event.text);
+              billingProcessEvent(session, event, centrifugo);
+            }
+            break;
+          }
+
+          // Forward other events (text_delta, tool_status, etc.) to client
+          handleAdapterEvent(session, event);
+        }
+
+        if (turnSuccess || !gotTimeout) break;
+      }
+      // End inner loop
+
+      if (!turnSuccess) break;
+      if (pendingTools.length === 0) break;
+      if (session._aborted) {
+        log.info(TAG, `Aborted before next semantic turn, session ${session.sessionId}`);
+        if (accumulatedCostUsd > 0) billAccumulatedCost(session, accumulatedCostUsd, centrifugo);
+        break;
+      }
+
+      toolTurnCount++;
     }
   } catch (err) {
     log.error(TAG, `Adapter error: ${err.message} ${err.stack || ''}`);
-    centrifugo.apiPublish(session.channel, { type: 'error', message: 'Ошибка модели' });
+    publishAdapterError(session, 'Ошибка: непредвиденная ситуация (код 04). Попробуйте повторить.');
   }
 }
 
@@ -801,13 +917,28 @@ async function runAdapterChatPassthrough(session, text) {
     system_prompt: session.systemPrompt,
     messages: [{ role: 'user', content: text }],
     tools: session.tools,
-    options: {},
+    options: {
+      chunkTimeout: config.adapterTimeout.chunkTimeout,
+      connectTimeout: config.adapterTimeout.connectTimeout,
+    },
     _configName: session.configName,
     _userId: session.userId,
   };
 
   try {
     for await (const event of session.adapter.chat(request)) {
+      // User abort — silent exit
+      if (event.type === 'error' && event.code === 'user_abort') {
+        return;
+      }
+
+      // Adapter timeout — no retry for passthrough, just notify
+      if (event.type === 'error' && event.code === 'adapter_timeout') {
+        log.error(TAG, `Passthrough adapter timeout [${event.stage}], session ${session.sessionId}`);
+        publishAdapterError(session, 'Ошибка: сервер не ответил вовремя (код 05). Попробуйте повторить.');
+        return;
+      }
+
       handleAdapterEvent(session, event);
 
       if (event.type === 'assistant_end') {
@@ -817,11 +948,19 @@ async function runAdapterChatPassthrough(session, text) {
     }
   } catch (err) {
     log.error(TAG, `Adapter error: ${err.message} ${err.stack || ''}`);
-    centrifugo.apiPublish(session.channel, { type: 'error', message: 'Ошибка модели' });
+    publishAdapterError(session, 'Ошибка: непредвиденная ситуация (код 06). Попробуйте повторить.');
   }
 }
 
+/** Publish error to client — sends as error event (Chat handles timer reset) */
+function publishAdapterError(session, message) {
+  centrifugo.apiPublish(session.channel, { type: 'error', message });
+}
+
 function handleAdapterEvent(session, event) {
+  // Suppress all events after abort — handleAbort() already sent terminal event
+  if (session._aborted) return;
+
   // Skip thinking (not shown to user)
   if (event.type === 'thinking_delta' || event.type === 'thinking_start' || event.type === 'thinking_end') return;
   // Skip text_delta for now (same as CLI behavior — only assistant_end)
@@ -855,7 +994,7 @@ function handleAdapterEvent(session, event) {
 
   // Add cost in rubles for Chat display
   if (event.type === 'assistant_end' && event.cost_usd) {
-    event.cost_rub = Math.round(event.cost_usd * 100 * 100) / 100;
+    event.cost_rub = Math.round(event.cost_usd * config.exchangeRate * 100) / 100;
   }
 
   // Publish to client
@@ -917,7 +1056,7 @@ function spawnClaudeForSession(session, initialMessage, { resume = false } = {})
 
       // Add cost in rubles for Chat display
       if (event.type === 'assistant_end' && event.cost_usd) {
-        event.cost_rub = Math.round(event.cost_usd * 100 * 100) / 100;
+        event.cost_rub = Math.round(event.cost_usd * config.exchangeRate * 100) / 100;
       }
 
       // Forward universal protocol events to session channel

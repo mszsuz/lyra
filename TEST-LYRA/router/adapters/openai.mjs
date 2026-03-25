@@ -2,6 +2,7 @@
 // OpenRouter, Gemini, GPT, Ollama, cli-proxy-api, etc.
 
 import * as log from '../log.mjs';
+import { readSSEWithTimeout, AdapterTimeoutError } from './sse-reader.mjs';
 const TAG = 'openai';
 
 export class OpenAiAdapter {
@@ -29,39 +30,103 @@ export class OpenAiAdapter {
   async *chat(request) {
     const body = this.#buildRequestBody(request);
     const url = `${this.#baseUrl}/chat/completions`;
+    const chunkTimeout = request.options?.chunkTimeout || 60_000;
+    const connectTimeout = request.options?.connectTimeout || 15_000;
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${request.api_key || this.#apiKey}`,
-      },
-      body: JSON.stringify(body),
-    });
+    // AbortController: connect-timeout, chunk-timeout teardown, user abort
+    const controller = new AbortController();
+    this._currentAbort = controller;
+    this._abortReason = null;
+
+    const connectTimer = setTimeout(() => {
+      this._abortReason = 'timeout';
+      controller.abort();
+    }, connectTimeout);
+
+    let res;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${request.api_key || this.#apiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      clearTimeout(connectTimer);
+      this._currentAbort = null;
+      if (err.name === 'AbortError') {
+        if (this._abortReason === 'user_abort') {
+          yield { type: 'error', code: 'user_abort', message: 'Aborted by user', retryable: false };
+        } else {
+          yield { type: 'error', code: 'adapter_timeout', stage: 'connect',
+                  message: `Connect timeout (${connectTimeout}ms)`, retryable: true };
+        }
+        return;
+      }
+      // Network error (DNS, refused, etc.)
+      yield { type: 'error', code: 'adapter_timeout', stage: 'connect',
+              message: err.message, retryable: true };
+      return;
+    }
+    clearTimeout(connectTimer);
 
     if (!res.ok) {
+      this._currentAbort = null;
       const errorText = await res.text();
       yield { type: 'error', message: `API error ${res.status}: ${errorText}`, code: 'api_error', retryable: res.status >= 500 };
       return;
     }
 
     if (body.stream) {
-      yield* this.#parseSSE(res.body);
+      try {
+        yield* this.#parseSSE(res.body, chunkTimeout, controller.signal);
+      } catch (err) {
+        if (err instanceof AdapterTimeoutError) {
+          yield { type: 'error', code: 'adapter_timeout', stage: 'chunk',
+                  message: err.message, retryable: true };
+          return;
+        }
+        if (err.name === 'AbortError') {
+          if (this._abortReason === 'user_abort') {
+            yield { type: 'error', code: 'user_abort', message: 'Aborted by user', retryable: false };
+          } else {
+            yield { type: 'error', code: 'adapter_timeout', stage: 'chunk',
+                    message: 'Stream aborted', retryable: true };
+          }
+          return;
+        }
+        throw err;
+      } finally {
+        this._currentAbort = null;
+      }
     } else {
+      this._currentAbort = null;
       const data = await res.json();
       yield* this.#parseNonStream(data);
     }
   }
 
   async abort(sessionId) {
+    if (this._currentAbort) {
+      this._abortReason = 'user_abort';
+      this._currentAbort.abort();
+      this._currentAbort = null;
+    }
     return { ok: true };
   }
 
   async #fetchGenerationCost(generationId, apiKey) {
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5_000);
       const res = await fetch(`https://openrouter.ai/api/v1/generation?id=${generationId}`, {
         headers: { 'Authorization': `Bearer ${apiKey || this.#apiKey}` },
+        signal: controller.signal,
       });
+      clearTimeout(timer);
       if (!res.ok) return null;
       const data = await res.json();
       const cost = data.data?.total_cost ?? data.data?.usage?.total_cost ?? null;
@@ -155,18 +220,18 @@ export class OpenAiAdapter {
     return result;
   }
 
-  async *#parseSSE(body) {
-    const decoder = new TextDecoder();
+  async *#parseSSE(body, chunkTimeout, signal) {
     let buffer = '';
     let fullText = '';
-    let toolCalls = new Map(); // id → {name, arguments}
+    let toolCalls = new Map();
     let model = this.#model;
     let usage = null;
     let cost = null;
     let generationId = null;
+    let finished = null;
 
-    for await (const chunk of body) {
-      buffer += decoder.decode(chunk, { stream: true });
+    for await (const text of readSSEWithTimeout(body, chunkTimeout, signal)) {
+      buffer += text;
 
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
@@ -184,7 +249,7 @@ export class OpenAiAdapter {
         }
 
         model = event.model || model;
-        if (event.id) { generationId = event.id; this._lastGenerationId = event.id; }
+        if (event.id) generationId = event.id;
         if (event.usage) {
           usage = event.usage;
           if (event.usage.cost !== undefined) cost = event.usage.cost;
@@ -220,7 +285,6 @@ export class OpenAiAdapter {
 
         // Finish
         if (choice.finish_reason) {
-          // Emit accumulated tool calls
           if (choice.finish_reason === 'tool_calls' || toolCalls.size > 0) {
             for (const [, tc] of toolCalls) {
               let input = {};
@@ -230,19 +294,17 @@ export class OpenAiAdapter {
             toolCalls.clear();
           }
 
-          // Mark finished — don't yield yet, wait for usage chunk
-          this._finished = choice.finish_reason;
+          finished = choice.finish_reason;
         }
       }
     }
 
-    // Emit assistant_end after stream fully consumed (all chunks including usage)
-    if (this._finished) {
-      // Fetch cost from OpenRouter generation API if not in SSE stream
+    // Emit assistant_end after stream fully consumed
+    if (finished) {
       if (cost == null && generationId && this.#baseUrl.includes('openrouter')) {
         cost = await this.#fetchGenerationCost(generationId);
       }
-      log.info(TAG, `assistant_end: cost=${cost}, model=${model}, stop=${this._finished}`);
+      log.info(TAG, `assistant_end: cost=${cost}, model=${model}, stop=${finished}`);
       yield {
         type: 'assistant_end',
         text: fullText,
@@ -254,9 +316,8 @@ export class OpenAiAdapter {
         },
         cost_usd: cost,
         model,
-        stop_reason: this._finished,
+        stop_reason: finished,
       };
-      this._finished = null;
     }
   }
 
