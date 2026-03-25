@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Пошаговая инструкция — От поступления до реализации кабеля</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: "Segoe UI", "Noto Sans", Arial, sans-serif;
+    font-size: 13px;
+    background: #1a1a2e;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ====== TUTORIAL HEADER ====== */
+  .tutorial-header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+    color: #fff;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    z-index: 100;
+  }
+  .tutorial-header h1 { font-size: 14px; font-weight: 600; flex: 1; }
+  .step-indicator { font-size: 13px; opacity: 0.85; white-space: nowrap; }
+  .nav-btn {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: #fff;
+    padding: 6px 18px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,0.22); }
+  .nav-btn:disabled { opacity: 0.35; cursor: default; }
+  .progress-bar { height: 3px; background: rgba(255,255,255,0.08); }
+  .progress-bar .progress-fill { height: 100%; background: #5ba3e6; transition: width 0.3s ease; }
+
+  /* ====== MAIN LAYOUT ====== */
+  .main-area { flex: 1; display: flex; overflow: hidden; }
+
+  /* ====== 1C SCREEN ====== */
+  .onec-screen { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #f5f0e0; }
+
+  /* -- 1C Top bar -- */
+  .onec-topbar {
+    background: #fff;
+    border-bottom: 1px solid #d0ccc0;
+    padding: 0 12px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .onec-logo {
+    color: #c00;
+    font-size: 18px;
+    font-weight: 800;
+    font-style: italic;
+    margin-right: 4px;
+  }
+  .onec-hamburger { font-size: 16px; color: #888; cursor: default; }
+  .onec-topbar-title { flex: 1; color: #333; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .onec-search {
+    background: #f8f8f8;
+    border: 1px solid #d0d0d0;
+    border-radius: 3px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: #999;
+    width: 200px;
+  }
+  .onec-user { font-size: 12px; color: #555; white-space: nowrap; }
+
+  /* -- Breadcrumb tabs -- */
+  .onec-tabs {
+    background: #f0ece0;
+    border-bottom: 1px solid #d0ccc0;
+    padding: 0 8px;
+    display: flex;
+    gap: 0;
+    height: 28px;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+  .onec-tab {
+    padding: 5px 14px;
+    font-size: 12px;
+    color: #555;
+    cursor: default;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 3px 3px 0 0;
+    background: transparent;
+    white-space: nowrap;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .onec-tab.active {
+    background: #f5f0e0;
+    border-color: #d0ccc0;
+    color: #333;
+    font-weight: 500;
+  }
+  .onec-tab .tab-close { margin-left: 6px; font-size: 10px; color: #aaa; }
+
+  /* -- Content wrapper -- */
+  .onec-content-wrap { flex: 1; display: flex; overflow: hidden; }
+
+  /* -- Left nav panel -- */
+  .onec-nav {
+    width: 180px;
+    background: #f5f0e0;
+    border-right: 1px solid #d8d4c8;
+    padding: 8px 0;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .nav-item {
+    padding: 7px 12px 7px 16px;
+    font-size: 13px;
+    color: #444;
+    cursor: default;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+  }
+  .nav-item:hover { background: rgba(0,0,0,0.04); }
+  .nav-item.active { background: rgba(0,0,0,0.07); font-weight: 600; color: #222; }
+  .nav-icon { font-size: 14px; width: 20px; text-align: center; opacity: 0.6; }
+
+  /* -- Main content -- */
+  .onec-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #f5f0e0; }
+
+  /* -- Section page (panel with links) -- */
+  .section-page {
+    flex: 1;
+    padding: 20px 24px;
+    overflow-y: auto;
+    display: flex;
+    gap: 40px;
+    flex-wrap: wrap;
+  }
+  .section-col { min-width: 200px; max-width: 320px; }
+  .section-col h3 { font-size: 13px; color: #2a8a2a; font-weight: 700; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #ddd; }
+  .section-col a {
+    display: block;
+    font-size: 12px;
+    color: #333;
+    text-decoration: none;
+    padding: 3px 0;
+    cursor: default;
+  }
+  .section-col a:hover { text-decoration: underline; }
+
+  /* -- Command bar -- */
+  .onec-cmdbar {
+    background: #f5f0e0;
+    border-bottom: 1px solid #d8d4c8;
+    padding: 5px 10px;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .cmd-btn {
+    padding: 4px 12px;
+    font-size: 12px;
+    background: #fff;
+    border: 1px solid #c8c4b8;
+    border-radius: 3px;
+    cursor: default;
+    color: #333;
+    white-space: nowrap;
+  }
+  .cmd-btn.post-close {
+    background: #f5d060;
+    border-color: #d4b040;
+    font-weight: 700;
+    color: #333;
+    padding: 5px 16px;
+    border-radius: 4px;
+  }
+  .cmd-btn.create-btn {
+    background: #fff;
+    border-color: #c8c4b8;
+    color: #333;
+  }
+  .cmd-btn.create-btn::before { content: "＋ "; color: #2a8a2a; font-weight: 700; }
+  .cmd-sep { width: 1px; height: 22px; background: #d0ccc0; margin: 0 3px; }
+
+  /* -- Filter bar -- */
+  .filter-bar {
+    padding: 6px 10px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .filter-field {
+    padding: 3px 8px;
+    border: 1px solid #d0ccc0;
+    background: #fff;
+    font-size: 12px;
+    color: #999;
+    border-radius: 2px;
+    min-width: 140px;
+  }
+
+  /* -- Quick links bar -- */
+  .quick-links {
+    padding: 4px 10px;
+    font-size: 11px;
+    color: #888;
+    border-bottom: 1px solid #e0dcd0;
+    flex-shrink: 0;
+  }
+  .quick-links a { color: #2a6aaa; text-decoration: underline; cursor: default; margin: 0 2px; }
+
+  /* -- List table -- */
+  .list-wrap { flex: 1; overflow: auto; }
+  table.list-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    background: #fff;
+  }
+  table.list-tbl th {
+    background: #f0ecdd;
+    border: 1px solid #d8d4c8;
+    padding: 5px 8px;
+    text-align: left;
+    font-weight: 600;
+    color: #444;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  table.list-tbl td {
+    border: 1px solid #e8e4d8;
+    padding: 4px 8px;
+    color: #333;
+  }
+  table.list-tbl tr:hover { background: #f8f4e8; }
+  table.list-tbl td.num { text-align: right; }
+  table.list-tbl .row-icon { text-align: center; width: 24px; }
+
+  /* -- Document form -- */
+  .doc-form { flex: 1; overflow-y: auto; padding: 12px 16px; }
+  .doc-title { font-size: 15px; font-weight: 700; color: #333; margin-bottom: 8px; }
+
+  /* form tabs inside doc */
+  .form-tabs {
+    display: flex; gap: 0; margin-bottom: 10px;
+    border-bottom: 2px solid #c8c4b8;
+  }
+  .form-tab {
+    padding: 6px 16px; font-size: 12px; cursor: default;
+    border: 1px solid transparent; border-bottom: none;
+    border-radius: 3px 3px 0 0; background: transparent; color: #555;
+  }
+  .form-tab.active {
+    background: #f5f0e0; border-color: #c8c4b8;
+    margin-bottom: -2px; font-weight: 600; color: #333;
+  }
+
+  .form-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-bottom: 14px; }
+  .form-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+  .form-row label {
+    width: 110px; text-align: right; font-size: 12px; color: #666; flex-shrink: 0;
+  }
+  .form-row .fld {
+    flex: 1; padding: 3px 6px; border: 1px solid #d0ccc0; background: #fff;
+    font-size: 12px; border-radius: 2px; color: #333; display: flex; align-items: center; gap: 4px;
+  }
+  .form-row .fld.empty { color: #bbb; }
+  .form-row .fld .fld-btns { margin-left: auto; color: #bbb; font-size: 10px; }
+
+  /* Tabular part */
+  .tab-part { margin-top: 4px; }
+  .tab-part-cmdbar {
+    background: #f5f0e0; border: 1px solid #d8d4c8; border-bottom: none;
+    padding: 3px 6px; display: flex; gap: 4px; align-items: center;
+  }
+  .tab-cmd {
+    padding: 2px 10px; font-size: 11px;
+    background: #fff; border: 1px solid #c8c4b8; border-radius: 2px; cursor: default;
+  }
+  .tab-cmd-icon { padding: 2px 6px; font-size: 13px; background: #fff; border: 1px solid #c8c4b8; border-radius: 2px; cursor: default; color: #888; }
+  table.tp-tbl {
+    width: 100%; border-collapse: collapse; font-size: 12px; background: #fff; border: 1px solid #d8d4c8;
+  }
+  table.tp-tbl th {
+    background: #f0ecdd; border: 1px solid #d8d4c8; padding: 4px 8px;
+    text-align: left; font-weight: 600; color: #444; white-space: nowrap;
+  }
+  table.tp-tbl td { border: 1px solid #e8e4d8; padding: 4px 8px; }
+  table.tp-tbl tr.selected { background: #f5e880; }
+  table.tp-tbl td.num { text-align: right; }
+
+  /* -- Done page -- */
+  .done-page {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 14px; padding: 20px;
+  }
+  .done-cards { display: flex; gap: 16px; }
+  .done-card {
+    padding: 14px 24px; border-radius: 8px; text-align: center;
+  }
+  .done-card .dc-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .done-card .dc-val { font-size: 20px; font-weight: 700; }
+
+  /* ====== HINT PANEL ====== */
+  .hint-panel {
+    width: 310px;
+    background: #1a2332;
+    color: #d4dce8;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -2px 0 10px rgba(0,0,0,0.25);
+    z-index: 50;
+    flex-shrink: 0;
+  }
+  .hint-title {
+    padding: 14px 18px 10px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #6aadee;
+    border-bottom: 1px solid #2a3648;
+  }
+  .hint-body { flex: 1; padding: 14px 18px; font-size: 13px; line-height: 1.55; overflow-y: auto; }
+  .hint-body p { margin-bottom: 8px; }
+  .hint-body .hint-action {
+    background: #253344;
+    border-left: 3px solid #5a9edf;
+    padding: 8px 12px; margin: 8px 0;
+    border-radius: 0 4px 4px 0; font-size: 12px; line-height: 1.6;
+  }
+  .hint-body .hint-note { color: #8896a8; font-size: 12px; font-style: italic; }
+  .hint-step-num {
+    display: inline-block; background: #3a7fc4; color: #fff;
+    width: 24px; height: 24px; border-radius: 50%;
+    text-align: center; line-height: 24px;
+    font-size: 12px; font-weight: 700; margin-right: 8px; vertical-align: middle;
+  }
+
+  /* ====== HIGHLIGHT ====== */
+  .hl {
+    position: relative;
+    z-index: 5;
+  }
+  .hl::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border: 2.5px solid #2a7fff;
+    border-radius: 4px;
+    animation: hl-pulse 1.4s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 10;
+  }
+  @keyframes hl-pulse {
+    0%, 100% { border-color: #2a7fff; box-shadow: 0 0 6px rgba(42,127,255,0.3); }
+    50% { border-color: #6ab4ff; box-shadow: 0 0 16px rgba(42,127,255,0.5); }
+  }
+
+  .hl-arrow {
+    position: absolute;
+    z-index: 20;
+    font-size: 18px;
+    color: #2a7fff;
+    animation: arrow-bounce 0.8s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes arrow-bounce {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(5px); }
+  }
+
+  .fld.hl-field {
+    background: #ffffdd !important;
+    border-color: #2a7fff !important;
+  }
+
+  /* Status bar */
+  .onec-statusbar {
+    background: #ece8d8;
+    border-top: 1px solid #d0ccc0;
+    padding: 2px 12px;
+    font-size: 11px;
+    color: #888;
+    flex-shrink: 0;
+  }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- TUTORIAL HEADER -->
+<div class="tutorial-header">
+  <h1>От поступления до реализации кабеля</h1>
+  <span class="step-indicator" id="stepIndicator">Шаг 1 из 12</span>
+  <button class="nav-btn" id="btnPrev" disabled onclick="prevStep()">← Назад</button>
+  <button class="nav-btn" id="btnNext" onclick="nextStep()">Далее →</button>
+</div>
+<div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+<!-- MAIN -->
+<div class="main-area">
+
+<div class="onec-screen">
+
+  <!-- 1C Top bar -->
+  <div class="onec-topbar">
+    <span class="onec-logo">1С</span>
+    <span class="onec-hamburger">☰</span>
+    <span class="onec-topbar-title" id="topbarTitle">Управление торговлей, редакция 11 (1С:Предприятие)</span>
+    <span class="onec-search">🔍 Поиск Ctrl+Shift+F</span>
+    <span class="onec-user">Администратор</span>
+  </div>
+
+  <!-- Breadcrumb tabs -->
+  <div class="onec-tabs" id="breadcrumbTabs">
+    <div class="onec-tab active">Начальная страница</div>
+  </div>
+
+  <!-- Content: nav + main -->
+  <div class="onec-content-wrap">
+
+    <!-- Left navigation -->
+    <div class="onec-nav" id="navPanel">
+      <!-- Filled by JS -->
+    </div>
+
+    <!-- Main content area -->
+    <div class="onec-main" id="mainContent">
+      <!-- Filled by JS -->
+    </div>
+
+  </div>
+
+  <div class="onec-statusbar">Администратор · ООО «Рассвет»</div>
+
+</div>
+
+<!-- HINT PANEL -->
+<div class="hint-panel">
+  <div class="hint-title" id="hintTitle"></div>
+  <div class="hint-body" id="hintBody"></div>
+</div>
+
+</div>
+
+<script>
+const NAV_ITEMS = [
+  { id: 'main', icon: '🏠', label: 'Главное' },
+  { id: 'planning', icon: '📋', label: 'Планирование' },
+  { id: 'crm', icon: '🕐', label: 'CRM и маркетинг' },
+  { id: 'sales', icon: '🛒', label: 'Продажи' },
+  { id: 'purchases', icon: '🛍', label: 'Закупки' },
+  { id: 'warehouse', icon: '📦', label: 'Склад и доставка' },
+  { id: 'treasury', icon: '💰', label: 'Казначейство' },
+  { id: 'finance', icon: '📊', label: 'Финансовый результат' },
+  { id: 'admin', icon: '⚙', label: 'НСИ и администрирование' },
+];
+
+const STEPS = [
+  // 1 — Открыть Закупки
+  {
+    hintTitle: 'Раздел «Закупки»',
+    hint: `<p>Начнём с оформления поступления товара на склад.</p>
+      <div class="hint-action">Нажмите на раздел <b>«Закупки»</b> в панели навигации слева.</div>
+      <p class="hint-note">В этом разделе находятся документы закупок: заказы поставщикам, поступления, возвраты.</p>`,
+    activeNav: 'purchases',
+    hlNav: 'purchases',
+    tabs: ['Начальная страница'],
+    activeTab: 0,
+    screen: 'home'
+  },
+  // 2 — Раздел Закупки → Документы закупки (все)
+  {
+    hintTitle: 'Документы закупки',
+    hint: `<p>Открылся раздел «Закупки» со списком доступных журналов и справочников.</p>
+      <div class="hint-action">Нажмите <b>«Документы закупки (все)»</b> в группе «Закупки».</div>
+      <p class="hint-note">Здесь отображаются все виды документов по закупкам в одном журнале.</p>`,
+    activeNav: 'purchases',
+    tabs: ['Начальная страница'],
+    activeTab: 0,
+    screen: 'purchasesSection',
+    hlLink: 'docs_all'
+  },
+  // 3 — Список → Создать
+  {
+    hintTitle: 'Создание документа',
+    hint: `<p>Открылся журнал документов закупки.</p>
+      <div class="hint-action">Нажмите кнопку <b>«Создать…»</b> на командной панели и выберите <b>«Приобретение товаров и услуг»</b>.</div>
+      <p class="hint-note">Будет создан новый документ поступления.</p>`,
+    activeNav: 'purchases',
+    tabs: ['Начальная страница', 'Документы закупки (все)'],
+    activeTab: 1,
+    screen: 'purchaseList',
+    hlCmd: 'create'
+  },
+  // 4 — Форма: Поставщик
+  {
+    hintTitle: 'Поставщик',
+    hint: `<p>Открылась форма нового документа. Заполним шапку — начнём с поставщика.</p>
+      <div class="hint-action">В поле <b>«Поставщик»</b> выберите <b>«Кабель-Комплект»</b>.</div>
+      <p class="hint-note">Контрагент и договор подставятся автоматически.</p>`,
+    activeNav: 'purchases',
+    tabs: ['Начальная страница', 'Документы закупки (все)', 'Приобретение товаров и услуг (создание)'],
+    activeTab: 2,
+    screen: 'receiptForm',
+    formTab: 'basic',
+    hlField: 'supplier',
+    fields: { supplier: '', org: 'ООО «Рассвет»', agent: '', contract: '', agreement: '', warehouse: '' }
+  },
+  // 5 — Склад
+  {
+    hintTitle: 'Склад',
+    hint: `<p>Поставщик выбран, контрагент и договор заполнились.</p>
+      <div class="hint-action">В поле <b>«Склад»</b> выберите <b>«Основной склад»</b>.</div>
+      <p class="hint-note">Склад определяет, куда будет оприходован товар.</p>`,
+    activeNav: 'purchases',
+    tabs: ['Начальная страница', 'Документы закупки (все)', 'Приобретение товаров и услуг (создание)'],
+    activeTab: 2,
+    screen: 'receiptForm',
+    formTab: 'basic',
+    hlField: 'warehouse',
+    fields: { supplier: 'Кабель-Комплект', org: 'ООО «Рассвет»', agent: 'Кабель-Комплект', contract: 'Основной договор', agreement: '', warehouse: '' }
+  },
+  // 6 — Вкладка Товары → Добавить
+  {
+    hintTitle: 'Добавление товара',
+    hint: `<p>Шапка заполнена. Переходим к табличной части.</p>
+      <div class="hint-action">Перейдите на вкладку <b>«Товары»</b> и нажмите <b>«Добавить»</b>.</div>
+      <p class="hint-note">В табличной части указывается номенклатура, количество и цена.</p>`,
+    activeNav: 'purchases',
+    tabs: ['Начальная страница', 'Документы закупки (все)', 'Приобретение товаров и услуг (создание)'],
+    activeTab: 2,
+    screen: 'receiptForm',
+    formTab: 'goods',
+    hlTabCmd: 'add',
+    fields: { supplier: 'Кабель-Комплект', org: 'ООО «Рассвет»', agent: 'Кабель-Комплект', contract: 'Основной договор', agreement: '', warehouse: 'Основной склад' },
+    rows: []
+  },
+  // 7 — Заполнить строку
+  {
+    hintTitle: 'Номенклатура, кол-во, цена',
+    hint: `<p>Строка добавлена. Заполните данные о товаре.</p>
+      <div class="hint-action">
+        <b>Номенклатура:</b> Кабель ВВГнг 3×2.5<br>
+        <b>Количество:</b> 500 м<br>
+        <b>Цена:</b> 42,00 ₽
+      </div>
+      <p class="hint-note">Сумма рассчитается автоматически: 500 × 42 = 21 000 ₽</p>`,
+    activeNav: 'purchases',
+    tabs: ['Начальная страница', 'Документы закупки (все)', 'Приобретение товаров и услуг (создание)'],
+    activeTab: 2,
+    screen: 'receiptForm',
+    formTab: 'goods',
+    hlRow: 0,
+    fields: { supplier: 'Кабель-Комплект', org: 'ООО «Рассвет»', agent: 'Кабель-Комплект', contract: 'Основной договор', agreement: '', warehouse: 'Основной склад' },
+    rows: [{ n: 'Кабель ВВГнг 3×2.5', qty: '', price: '', sum: '' }]
+  },
+  // 8 — Провести и закрыть
+  {
+    hintTitle: 'Проведение документа',
+    hint: `<p>Товар добавлен, документ заполнен.</p>
+      <div class="hint-action">Нажмите <b>«Провести и закрыть»</b>.</div>
+      <p class="hint-note">Товар будет оприходован на «Основной склад». Переходим к продаже.</p>`,
+    activeNav: 'purchases',
+    tabs: ['Начальная страница', 'Документы закупки (все)', 'Приобретение товаров и услуг (создание)'],
+    activeTab: 2,
+    screen: 'receiptForm',
+    formTab: 'goods',
+    hlCmd: 'postClose',
+    fields: { supplier: 'Кабель-Комплект', org: 'ООО «Рассвет»', agent: 'Кабель-Комплект', contract: 'Основной договор', agreement: '', warehouse: 'Основной склад' },
+    rows: [{ n: 'Кабель ВВГнг 3×2.5', qty: '500', price: '42,00', sum: '21 000,00' }]
+  },
+  // 9 — Продажи
+  {
+    hintTitle: 'Раздел «Продажи»',
+    hint: `<p>Поступление оформлено! Теперь продадим часть кабеля.</p>
+      <div class="hint-action">Перейдите в раздел <b>«Продажи»</b> в навигации слева.</div>
+      <p class="hint-note">Аналогично закупкам — через журнал документов продажи.</p>`,
+    activeNav: 'sales',
+    hlNav: 'sales',
+    tabs: ['Начальная страница'],
+    activeTab: 0,
+    screen: 'salesSection'
+  },
+  // 10 — Документы продажи → Создать
+  {
+    hintTitle: 'Создание реализации',
+    hint: `<p>В разделе «Продажи» выберите журнал документов.</p>
+      <div class="hint-action">Нажмите <b>«Документы продажи (все)»</b>, затем <b>«Создать…»</b> → <b>«Реализация товаров и услуг»</b>.</div>`,
+    activeNav: 'sales',
+    tabs: ['Начальная страница', 'Документы продажи (все)'],
+    activeTab: 1,
+    screen: 'salesList',
+    hlCmd: 'create'
+  },
+  // 11 — Форма реализации заполненная
+  {
+    hintTitle: 'Заполнение реализации',
+    hint: `<p>Заполняем документ реализации аналогично поступлению:</p>
+      <div class="hint-action">
+        <b>Клиент:</b> Строй-Сервис<br>
+        <b>Склад:</b> Основной склад<br>
+        <b>Товар:</b> Кабель ВВГнг 3×2.5<br>
+        <b>Количество:</b> 200 м<br>
+        <b>Цена:</b> 68,00 ₽
+      </div>
+      <p class="hint-note">Наценка: (68 − 42) × 200 = 5 200 ₽ прибыли</p>`,
+    activeNav: 'sales',
+    tabs: ['Начальная страница', 'Документы продажи (все)', 'Реализация товаров и услуг (создание)'],
+    activeTab: 2,
+    screen: 'saleForm',
+    formTab: 'goods',
+    fields: { client: 'Строй-Сервис', org: 'ООО «Рассвет»', agent: 'Строй-Сервис', contract: 'Основной договор', agreement: '', warehouse: 'Основной склад' },
+    rows: [{ n: 'Кабель ВВГнг 3×2.5', qty: '200', price: '68,00', sum: '13 600,00' }]
+  },
+  // 12 — Провести реализацию → Готово
+  {
+    hintTitle: 'Готово!',
+    hint: `<p>Цепочка документов оформлена:</p>
+      <div class="hint-action">
+        ✓ <b>Поступление</b> — 500 м на сумму 21 000 ₽<br>
+        ✓ <b>Реализация</b> — 200 м на сумму 13 600 ₽<br>
+        ✓ <b>Остаток на складе</b> — 300 м
+      </div>
+      <p>Для контроля остатков используйте отчёт <b>«Остатки товаров на складах»</b> в разделе «Склад и доставка».</p>
+      <p class="hint-note">Валовая прибыль по сделке: 5 200 ₽</p>`,
+    activeNav: 'sales',
+    tabs: ['Начальная страница'],
+    activeTab: 0,
+    screen: 'done'
+  }
+];
+
+let step = 0;
+
+function render() {
+  const s = STEPS[step];
+  const total = STEPS.length;
+
+  // Header
+  document.getElementById('stepIndicator').textContent = `Шаг ${step+1} из ${total}`;
+  document.getElementById('btnPrev').disabled = step === 0;
+  document.getElementById('btnNext').textContent = step === total-1 ? '✓ Готово' : 'Далее →';
+  document.getElementById('progressFill').style.width = ((step+1)/total*100)+'%';
+
+  // Hint
+  document.getElementById('hintTitle').innerHTML = `<span class="hint-step-num">${step+1}</span> ${s.hintTitle}`;
+  document.getElementById('hintBody').innerHTML = s.hint;
+
+  // Nav
+  renderNav(s);
+
+  // Tabs
+  renderTabs(s);
+
+  // Content
+  renderContent(s);
+}
+
+function renderNav(s) {
+  const el = document.getElementById('navPanel');
+  el.innerHTML = NAV_ITEMS.map(n => {
+    const isActive = n.id === s.activeNav;
+    const isHl = n.id === s.hlNav;
+    return `<div class="nav-item ${isActive?'active':''} ${isHl?'hl':''}" style="position:relative;">
+      <span class="nav-icon">${n.icon}</span> ${n.label}
+    </div>`;
+  }).join('');
+}
+
+function renderTabs(s) {
+  const el = document.getElementById('breadcrumbTabs');
+  el.innerHTML = s.tabs.map((t, i) => {
+    const isActive = i === s.activeTab;
+    return `<div class="onec-tab ${isActive?'active':''}">${t}${i>0?'<span class="tab-close"> ✕</span>':''}</div>`;
+  }).join('');
+}
+
+function renderContent(s) {
+  const el = document.getElementById('mainContent');
+  switch(s.screen) {
+    case 'home': el.innerHTML = renderHome(); break;
+    case 'purchasesSection': el.innerHTML = renderPurchasesSection(s); break;
+    case 'purchaseList': el.innerHTML = renderPurchaseList(s); break;
+    case 'receiptForm': el.innerHTML = renderReceiptForm(s); break;
+    case 'salesSection': el.innerHTML = renderSalesSection(s); break;
+    case 'salesList': el.innerHTML = renderSalesList(s); break;
+    case 'saleForm': el.innerHTML = renderSaleForm(s); break;
+    case 'done': el.innerHTML = renderDone(); break;
+  }
+}
+
+function renderHome() {
+  return `<div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;opacity:0.5;">
+    <div style="font-size:40px;">📊</div>
+    <div style="font-size:14px;">Начальная страница</div>
+  </div>`;
+}
+
+function renderPurchasesSection(s) {
+  const hl = s.hlLink;
+  return `<div class="section-page">
+    <div class="section-col">
+      <h3>Закупки</h3>
+      <a href="#">Заказы поставщикам</a>
+      <a href="#" ${hl==='docs_all'?'class="hl" style="position:relative;display:inline-block;"':''}><b>Документы закупки (все)</b></a>
+      <a href="#">Накладные к оформлению</a>
+      <a href="#">Доверенности на получение товаров</a>
+    </div>
+    <div class="section-col">
+      <h3>НСИ закупок</h3>
+      <a href="#">Поставщики</a>
+      <a href="#">Договоры с поставщиками</a>
+      <a href="#">Соглашения с поставщиками</a>
+      <a href="#">Цены поставщиков (прайс-листы)</a>
+    </div>
+    <div class="section-col">
+      <h3>Расчёты с поставщиками</h3>
+      <a href="#">Оформление заявок на оплату</a>
+      <a href="#">Сверки взаиморасчётов</a>
+    </div>
+    <div class="section-col" style="margin-left:auto;">
+      <h3 style="color:#2a8a2a;">Создать</h3>
+      <a href="#">Заказ поставщику</a>
+    </div>
+  </div>`;
+}
+
+function renderSalesSection(s) {
+  return `<div class="section-page">
+    <div class="section-col">
+      <h3>Продажи</h3>
+      <a href="#">Заказы клиентов</a>
+      <a href="#"><b>Документы продажи (все)</b></a>
+      <a href="#">Возвраты от клиентов</a>
+      <a href="#">Счета-фактуры выданные</a>
+    </div>
+    <div class="section-col">
+      <h3>НСИ продаж</h3>
+      <a href="#">Клиенты</a>
+      <a href="#">Договоры с клиентами</a>
+      <a href="#">Соглашения с клиентами</a>
+    </div>
+    <div class="section-col" style="margin-left:auto;">
+      <h3 style="color:#2a8a2a;">Создать</h3>
+      <a href="#">Заказ клиента</a>
+    </div>
+  </div>`;
+}
+
+function renderListHtml(s, docRows) {
+  return `
+    <div class="filter-bar">
+      <span class="filter-field">Организация</span>
+      <span class="filter-field">Склад</span>
+      <span class="filter-field">Менеджер</span>
+    </div>
+    <div class="quick-links">К оформлению: <a href="#">Поступления</a> <a href="#">Приобретения</a></div>
+    <div class="onec-cmdbar">
+      <div class="cmd-btn create-btn ${s.hlCmd==='create'?'hl':''}" style="position:relative;">Создать…</div>
+      <div class="cmd-btn">Установить статус</div>
+      <div class="cmd-sep"></div>
+      <div class="cmd-btn">ЭДО</div>
+      <div class="cmd-btn">Печать</div>
+      <div class="cmd-sep"></div>
+      <div class="onec-search" style="width:160px;">🔍 Поиск (Ctrl+F)</div>
+      <div class="cmd-btn">Ещё</div>
+    </div>
+    <div class="list-wrap">
+      <table class="list-tbl">
+        <thead><tr>
+          <th style="width:24px;"></th><th>Номер</th><th>Дата</th><th>Вид документа, Хоз. операция</th><th style="text-align:right;">Сумма</th><th>Валюта</th><th>Контрагент</th>
+        </tr></thead>
+        <tbody>
+          ${docRows.map(r => `<tr>
+            <td class="row-icon" style="color:${r.ok?'#2a8a2a':'#cc8800'};">${r.ok?'✔':'⚠'}</td>
+            <td>${r.num}</td><td>${r.date}</td><td>${r.kind}</td>
+            <td class="num">${r.sum}</td><td>RUB</td><td>${r.agent}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderPurchaseList(s) {
+  return renderListHtml(s, [
+    { ok:true, num:'ТД00-000041', date:'20.03.2026', kind:'Приобретение товаров и услуг, Закуп…', sum:'85 400,00', agent:'ЭлектроСнаб' },
+    { ok:true, num:'ТД00-000040', date:'18.03.2026', kind:'Приобретение товаров и услуг, Закуп…', sum:'34 200,00', agent:'Кабель-Комплект' },
+    { ok:true, num:'ТД00-000039', date:'15.03.2026', kind:'Приобретение товаров и услуг, Закуп…', sum:'128 750,00', agent:'СтройТорг' },
+    { ok:false, num:'ТД00-000038', date:'12.03.2026', kind:'Приобретение товаров и услуг, Закуп…', sum:'67 000,00', agent:'Кабель-Комплект' },
+  ]);
+}
+
+function renderSalesList(s) {
+  return renderListHtml(s, [
+    { ok:true, num:'РН00-000025', date:'22.03.2026', kind:'Реализация товаров и услуг', sum:'94 500,00', agent:'МонтажПлюс' },
+    { ok:true, num:'РН00-000024', date:'19.03.2026', kind:'Реализация товаров и услуг', sum:'42 800,00', agent:'Строй-Сервис' },
+    { ok:true, num:'РН00-000023', date:'14.03.2026', kind:'Реализация товаров и услуг', sum:'165 200,00', agent:'ЭлектроМонтаж' },
+  ]);
+}
+
+function renderDocFormHtml(title, s, isSale) {
+  const f = s.fields;
+  const formTab = s.formTab || 'basic';
+  const rows = s.rows || [];
+  const hl = s.hlField;
+  const hlCmd = s.hlCmd;
+  const hlTabCmd = s.hlTabCmd;
+  const hlRow = s.hlRow;
+  const num = isSale ? 'РН00-000026' : 'ТД00-000042';
+
+  const counterpartyLabel = isSale ? 'Клиент:' : 'Поставщик:';
+  const counterpartyField = isSale ? f.client : f.supplier;
+
+  const basicFields = `
+    <div class="form-fields">
+      <div class="form-row">
+        <label>Номер:</label>
+        <div class="fld" style="color:#888;">${num} от 25.03.2026</div>
+      </div>
+      <div class="form-row">
+        <label>Операция:</label>
+        <div class="fld">${isSale?'Реализация':'Закупка у поставщика'}</div>
+      </div>
+      <div class="form-row">
+        <label>${counterpartyLabel}</label>
+        <div class="fld ${hl==='supplier'||hl==='client'?'hl-field hl':''} ${!counterpartyField?'empty':''}" style="position:relative;">
+          ${counterpartyField || '< выберите >'}<span class="fld-btns">… ⏍</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Организация:</label>
+        <div class="fld">${f.org}<span class="fld-btns">▾</span></div>
+      </div>
+      <div class="form-row">
+        <label>Контрагент:</label>
+        <div class="fld ${f.agent?'':'empty'}">${f.agent || '< заполнится >'}<span class="fld-btns">… ⏍</span></div>
+      </div>
+      <div class="form-row">
+        <label>Договор:</label>
+        <div class="fld ${f.contract?'':'empty'}">${f.contract || '< заполнится >'}<span class="fld-btns">… ⏍</span></div>
+      </div>
+      <div class="form-row">
+        <label>Склад:</label>
+        <div class="fld ${hl==='warehouse'?'hl-field hl':''} ${!f.warehouse?'empty':''}" style="position:relative;">
+          ${f.warehouse || '< выберите >'}<span class="fld-btns">… ⏍</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Валюты:</label>
+        <div class="fld" style="color:#2a6aaa;">Документ и расчёты: RUB</div>
+      </div>
+    </div>`;
+
+  const goodsTab = `
+    <div class="tab-part">
+      <div class="tab-part-cmdbar">
+        <div class="tab-cmd ${hlTabCmd==='add'?'hl':''}" style="position:relative;">Добавить</div>
+        <div class="tab-cmd-icon">↑</div>
+        <div class="tab-cmd-icon">↓</div>
+        <div class="tab-cmd-icon">📋</div>
+        <div class="tab-cmd-icon">📄</div>
+        <div style="flex:1;"></div>
+        <div class="tab-cmd">Заполнить</div>
+        <div class="onec-search" style="width:140px;font-size:11px;">🔍 Поиск</div>
+        <div class="tab-cmd">Ещё</div>
+      </div>
+      <table class="tp-tbl">
+        <thead><tr>
+          <th style="width:30px;">N</th><th>Номенклатура</th><th style="width:90px;">Количество</th><th style="width:90px;">Цена</th><th style="width:110px;">Сумма</th><th style="width:50px;">%НДС</th>
+        </tr></thead>
+        <tbody>
+          ${rows.length === 0
+            ? `<tr><td colspan="6" style="text-align:center;color:#bbb;padding:24px;">Нажмите «Добавить» для ввода товаров</td></tr>`
+            : rows.map((r, i) => `<tr class="${hlRow===i?'selected':''}" ${hlRow===i?'style="position:relative;"':''}>
+                <td class="num">${i+1}</td>
+                <td>${r.n}</td>
+                <td class="num" ${!r.qty?'style="background:#ffffdd;"':''}>${r.qty}</td>
+                <td class="num" ${!r.price?'style="background:#ffffdd;"':''}>${r.price}</td>
+                <td class="num">${r.sum}</td>
+                <td>20%</td>
+              </tr>`).join('')
+          }
+        </tbody>
+      </table>
+      ${rows.some(r=>r.sum) ? `<div style="text-align:right;padding:6px 8px;font-size:13px;font-weight:600;">Итого: ${rows.reduce((a,r)=>a+(parseFloat((r.sum||'0').replace(/\s/g,'').replace(',','.'))||0),0).toLocaleString('ru-RU',{minimumFractionDigits:2})} ₽</div>` : ''}
+    </div>`;
+
+  return `
+    <div class="onec-cmdbar">
+      <div class="cmd-btn post-close ${hlCmd==='postClose'?'hl':''}" style="position:relative;">Провести и закрыть</div>
+      <div class="cmd-btn">💾</div>
+      <div class="cmd-btn">📋</div>
+      <div class="cmd-sep"></div>
+      <div class="cmd-btn">ЭДО ▾</div>
+      <div class="cmd-btn">Печать ▾</div>
+      <div class="cmd-sep"></div>
+      <div class="cmd-btn">Отчёты ▾</div>
+      <div class="cmd-btn">Отправить ▾</div>
+      <div style="flex:1;"></div>
+      <div class="cmd-btn">Ещё ▾</div>
+    </div>
+    <div class="doc-form">
+      <div class="form-tabs">
+        <div class="form-tab ${formTab==='basic'?'active':''}">Основное</div>
+        <div class="form-tab ${formTab==='goods'?'active':''}">Товары ${rows.length?'('+rows.length+')':''}</div>
+        <div class="form-tab">Доставка</div>
+        <div class="form-tab">Дополнительно</div>
+      </div>
+      ${formTab === 'basic' ? basicFields : ''}
+      ${formTab === 'goods' ? goodsTab : ''}
+    </div>`;
+}
+
+function renderReceiptForm(s) {
+  return renderDocFormHtml('Приобретение товаров и услуг', s, false);
+}
+
+function renderSaleForm(s) {
+  return renderDocFormHtml('Реализация товаров и услуг', s, true);
+}
+
+function renderDone() {
+  return `<div class="done-page">
+    <div style="font-size:48px;">✅</div>
+    <div style="font-size:17px;font-weight:700;color:#2a7a3a;">Цепочка документов оформлена</div>
+    <div style="max-width:420px;text-align:center;color:#666;line-height:1.5;font-size:13px;">
+      Поступление и реализация кабеля ВВГнг&nbsp;3×2.5 проведены.<br>
+      Остаток на складе: <b>300 м</b>
+    </div>
+    <div class="done-cards">
+      <div class="done-card" style="background:#e8f5e9;">
+        <div class="dc-label">Закуплено</div>
+        <div class="dc-val" style="color:#2e7d32;">21 000 ₽</div>
+      </div>
+      <div class="done-card" style="background:#e3f2fd;">
+        <div class="dc-label">Продано</div>
+        <div class="dc-val" style="color:#1565c0;">13 600 ₽</div>
+      </div>
+      <div class="done-card" style="background:#fff8e1;">
+        <div class="dc-label">Прибыль</div>
+        <div class="dc-val" style="color:#e65100;">5 200 ₽</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function nextStep() {
+  if (step < STEPS.length - 1) { step++; render(); }
+}
+function prevStep() {
+  if (step > 0) { step--; render(); }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextStep(); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); prevStep(); }
+});
+
+render();
+</script>
+</body>
+</html>
