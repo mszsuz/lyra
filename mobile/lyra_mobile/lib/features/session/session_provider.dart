@@ -48,6 +48,7 @@ class SessionNotifier extends StateNotifier<SessionInfo?> {
           );
           state = updated;
           _storage.saveSession(updated);
+          _storage.saveBalance(balance);
         }
 
       case AuthAckMessage(:final sessionId, :final status):

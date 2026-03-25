@@ -1003,9 +1003,12 @@ function handleAdapterEvent(session, event) {
     event.cost_rub = Math.round(event.cost_usd * (config.billingMultiplier || 1) * config.exchangeRate * 100) / 100;
   }
 
-  // Publish to client
+  // Publish to client (strip provider cost)
   writeHistory(session, 'out', event);
-  centrifugo.apiPublish(session.channel, event).catch(err => {
+  const publishEvent = { ...event };
+  delete publishEvent.cost_usd;
+  delete publishEvent.usage;
+  centrifugo.apiPublish(session.channel, publishEvent).catch(err => {
     log.error(TAG, `Failed to publish: ${err.message}`);
   });
 
