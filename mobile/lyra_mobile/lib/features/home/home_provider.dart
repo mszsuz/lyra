@@ -76,6 +76,7 @@ class HomeNotifier extends StateNotifier<HomeState> {
       final sessions = await completer.future.timeout(
         const Duration(seconds: 5),
       );
+      await _syncStorage(sessions);
       state = state.copyWith(sessions: sessions, loading: false);
     } on TimeoutException {
       state = state.copyWith(loading: false, error: 'Нет ответа от сервера');
@@ -83,6 +84,25 @@ class HomeNotifier extends StateNotifier<HomeState> {
       _sub?.cancel();
       _sub = null;
       await _centrifugo.disconnect();
+    }
+  }
+
+  /// Синхронизирует local storage с ответом Роутера:
+  /// удаляет мёртвые сессии, обновляет живые.
+  Future<void> _syncStorage(List<SessionInfo> serverSessions) async {
+    final liveIds = serverSessions.map((s) => s.sessionId).toSet();
+    final local = await _storage.getSessions();
+
+    // Удалить из storage сессии, которых нет на сервере
+    for (final s in local) {
+      if (!liveIds.contains(s.sessionId)) {
+        await _storage.removeSession(s.sessionId);
+      }
+    }
+
+    // Обновить/добавить живые сессии
+    for (final s in serverSessions) {
+      await _storage.saveSession(s);
     }
   }
 

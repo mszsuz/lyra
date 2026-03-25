@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/balance_provider.dart';
 import '../../core/centrifugo/centrifugo_client.dart';
 import '../../core/centrifugo/message_types.dart';
 import '../../core/storage/secure_storage.dart';
@@ -10,10 +11,11 @@ import '../../models/session_info.dart';
 class SessionNotifier extends StateNotifier<SessionInfo?> {
   final CentrifugoClient _centrifugo;
   final SecureStorage _storage;
+  final BalanceNotifier _balance;
   final String sessionId;
   StreamSubscription<IncomingMessage>? _messagesSub;
 
-  SessionNotifier(this._centrifugo, this._storage, this.sessionId)
+  SessionNotifier(this._centrifugo, this._storage, this._balance, this.sessionId)
       : super(null) {
     _init();
   }
@@ -48,7 +50,7 @@ class SessionNotifier extends StateNotifier<SessionInfo?> {
           );
           state = updated;
           _storage.saveSession(updated);
-          _storage.saveBalance(balance);
+          _balance.update(balance);
         }
 
       case AuthAckMessage(:final sessionId, :final status):
@@ -89,5 +91,6 @@ final sessionProvider = StateNotifierProvider.autoDispose
     .family<SessionNotifier, SessionInfo?, String>((ref, sessionId) {
   final centrifugo = ref.watch(centrifugoClientProvider);
   final storage = ref.watch(secureStorageProvider);
-  return SessionNotifier(centrifugo, storage, sessionId);
+  final balance = ref.read(balanceProvider.notifier);
+  return SessionNotifier(centrifugo, storage, balance, sessionId);
 });

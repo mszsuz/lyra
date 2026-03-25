@@ -4,15 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../../app/theme.dart';
+import '../../core/balance_provider.dart';
 import '../../core/centrifugo/centrifugo_client.dart';
-import '../../core/storage/secure_storage.dart';
 import '../../models/session_info.dart';
 import 'session_provider.dart';
-
-final _balanceProvider = FutureProvider<double>((ref) async {
-  final storage = ref.watch(secureStorageProvider);
-  return storage.getBalance();
-});
 
 class SessionScreen extends ConsumerStatefulWidget {
   final String sessionId;
@@ -247,9 +242,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
         status == 'insufficient_balance' || status == 'disconnected';
     final bgColor = isNegative ? LyraTheme.red : LyraTheme.accent;
 
-    // Read user-level balance (not per-session)
-    final balanceFuture = ref.watch(_balanceProvider);
-    final userBalance = balanceFuture.valueOrNull ?? session.balance;
+    final userBalance = ref.watch(balanceProvider);
 
     final String balanceText;
     if (status == 'disconnected') {

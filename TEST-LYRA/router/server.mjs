@@ -738,10 +738,13 @@ async function runAdapterChatManaged(session, text) {
 
   conversation.addUserMessage(session, text);
 
+  const msgs = conversation.getMessages(session);
+  log.debug(TAG, `⏱ adapter request: session=${session.sessionId}, messages=${msgs.length}, tools=${session.tools?.length || 0}`);
+
   const request = {
     session_id: session.sessionId,
     system_prompt: session.systemPrompt,
-    messages: conversation.getMessages(session),
+    messages: msgs,
     tools: session.tools,
     options: {
       chunkTimeout: config.adapterTimeout.chunkTimeout,
@@ -817,7 +820,7 @@ async function runAdapterChatManaged(session, text) {
           if (event.type === 'tool_use') {
             pendingTools.push(event);
             if (session._aborted) continue;
-            log.info(TAG, `Tool use from adapter: ${event.name}`);
+            log.info(TAG, `Tool use from adapter: ${event.name}`, event.input ? JSON.stringify(event.input).slice(0, 200) : '');
             const toolKey = resolveToolKey(event.name, session);
             const toolLabel = profile.toolLabels?.[toolKey] || event.name;
             centrifugo.apiPublish(session.channel, {

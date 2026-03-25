@@ -3,15 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import '../../core/balance_provider.dart';
 import '../../core/storage/secure_storage.dart';
 import '../../models/session_info.dart';
 import 'home_provider.dart';
-
-// Provider for user balance
-final balanceProvider = FutureProvider<double>((ref) async {
-  final storage = ref.watch(secureStorageProvider);
-  return storage.getBalance();
-});
 
 // Provider for auto-scanner setting
 final autoScannerProvider = FutureProvider<bool>((ref) async {
@@ -37,9 +32,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ref.read(homeProvider.notifier).loadSessions();
 
       // Auto-open scanner if enabled and balance > 0
-      ref.read(autoScannerProvider.future).then((auto) async {
+      ref.read(autoScannerProvider.future).then((auto) {
         if (!auto || !mounted) return;
-        final balance = await ref.read(balanceProvider.future);
+        final balance = ref.read(balanceProvider);
         if (balance > 0 && mounted) {
           context.go('/scanner');
         }
@@ -56,9 +51,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.invalidate(balanceProvider);
     final homeState = ref.watch(homeProvider);
-    final balance = ref.watch(balanceProvider).valueOrNull ?? 0.0;
+    final balance = ref.watch(balanceProvider);
 
     return Scaffold(
       body: SafeArea(

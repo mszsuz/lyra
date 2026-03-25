@@ -164,20 +164,23 @@ export class AdapterTimeoutError extends Error {
 export async function* readSSEWithTimeout(body, chunkTimeout, signal) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
+  let firstChunk = true;
 
   try {
     while (true) {
       if (signal?.aborted) return;
 
       let timer;
+      const stage = firstChunk ? 'first_chunk' : 'chunk';
       const timeoutPromise = new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new AdapterTimeoutError('chunk', chunkTimeout)), chunkTimeout);
+        timer = setTimeout(() => reject(new AdapterTimeoutError(stage, chunkTimeout)), chunkTimeout);
       });
 
       try {
         const result = await Promise.race([reader.read(), timeoutPromise]);
         clearTimeout(timer);
         if (result.done) break;
+        firstChunk = false;
         yield decoder.decode(result.value, { stream: true });
       } catch (err) {
         clearTimeout(timer);

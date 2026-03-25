@@ -43,6 +43,9 @@ export class OpenAiAdapter {
       controller.abort();
     }, connectTimeout);
 
+    log.debug(TAG, `fetch ${this.#model} → ${url} (connectTimeout=${connectTimeout}, chunkTimeout=${chunkTimeout})`);
+    const fetchStart = Date.now();
+
     let res;
     try {
       res = await fetch(url, {
@@ -57,6 +60,7 @@ export class OpenAiAdapter {
     } catch (err) {
       clearTimeout(connectTimer);
       this._currentAbort = null;
+      log.warn(TAG, `fetch failed after ${Date.now() - fetchStart}ms: ${err.message}`);
       if (err.name === 'AbortError') {
         if (this._abortReason === 'user_abort') {
           yield { type: 'error', code: 'user_abort', message: 'Aborted by user', retryable: false };
@@ -72,15 +76,18 @@ export class OpenAiAdapter {
       return;
     }
     clearTimeout(connectTimer);
+    log.debug(TAG, `HTTP ${res.status} in ${Date.now() - fetchStart}ms`);
 
     if (!res.ok) {
       this._currentAbort = null;
       const errorText = await res.text();
+      log.warn(TAG, `API error ${res.status}: ${errorText.slice(0, 200)}`);
       yield { type: 'error', message: `API error ${res.status}: ${errorText}`, code: 'api_error', retryable: res.status >= 500 };
       return;
     }
 
     if (body.stream) {
+      log.debug(TAG, `SSE stream started, waiting for first chunk...`);
       try {
         yield* this.#parseSSE(res.body, chunkTimeout, controller.signal);
       } catch (err) {

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/balance_provider.dart';
 import '../../core/centrifugo/centrifugo_client.dart';
 import '../../core/centrifugo/message_types.dart';
 import '../../core/storage/secure_storage.dart';
@@ -43,10 +44,11 @@ class ScannerState {
 class ScannerNotifier extends StateNotifier<ScannerState> {
   final CentrifugoClient _centrifugo;
   final SecureStorage _storage;
+  final BalanceNotifier _balance;
   StreamSubscription<IncomingMessage>? _messagesSub;
   String _currentMobileJwt = '';
 
-  ScannerNotifier(this._centrifugo, this._storage)
+  ScannerNotifier(this._centrifugo, this._storage, this._balance)
       : super(const ScannerState());
 
   Future<void> onQrScanned(String qrData) async {
@@ -154,8 +156,7 @@ class ScannerNotifier extends StateNotifier<ScannerState> {
             :final currency,
           ):
         if (status == 'ok') {
-          // Save balance as user-level field, not per-session
-          if (balance != null) _storage.saveBalance(balance);
+          if (balance != null) _balance.update(balance);
 
           // Remove old sessions to the same database
           final cn = configName ?? '';
@@ -191,8 +192,7 @@ class ScannerNotifier extends StateNotifier<ScannerState> {
           :final balance,
           :final currency,
         ):
-        // Save balance as user-level field
-        _storage.saveBalance(balance);
+        _balance.update(balance);
         if (state.session != null &&
             state.session!.sessionId == sessionId) {
           final updated = state.session!.copyWith(
@@ -234,5 +234,6 @@ final scannerProvider =
     StateNotifierProvider.autoDispose<ScannerNotifier, ScannerState>((ref) {
   final centrifugo = ref.watch(centrifugoClientProvider);
   final storage = ref.watch(secureStorageProvider);
-  return ScannerNotifier(centrifugo, storage);
+  final balance = ref.read(balanceProvider.notifier);
+  return ScannerNotifier(centrifugo, storage, balance);
 });

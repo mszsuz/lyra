@@ -14,6 +14,10 @@ export class AdapterTimeoutError extends Error {
  * Read SSE stream with a watchdog timer between chunks.
  * Yields decoded string chunks. Throws AdapterTimeoutError on silence.
  *
+ * The watchdog starts IMMEDIATELY — so the very first chunk must arrive
+ * within chunkTimeout after the HTTP 200 response, closing the gap between
+ * connectTimeout (covers fetch) and chunkTimeout (covers streaming).
+ *
  * @param {ReadableStream} body — res.body from fetch
  * @param {number} chunkTimeout — ms, max silence between chunks
  * @param {AbortSignal} [signal] — for external abort (user interrupt / retry cleanup)
@@ -21,15 +25,17 @@ export class AdapterTimeoutError extends Error {
 export async function* readSSEWithTimeout(body, chunkTimeout, signal) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
+  let firstChunk = true;
 
   try {
     while (true) {
       if (signal?.aborted) return;
 
       let timer;
+      const stage = firstChunk ? 'first_chunk' : 'chunk';
       const timeoutPromise = new Promise((_, reject) => {
         timer = setTimeout(
-          () => reject(new AdapterTimeoutError('chunk', chunkTimeout)),
+          () => reject(new AdapterTimeoutError(stage, chunkTimeout)),
           chunkTimeout,
         );
       });
@@ -39,6 +45,7 @@ export async function* readSSEWithTimeout(body, chunkTimeout, signal) {
         clearTimeout(timer);
 
         if (result.done) break;
+        firstChunk = false;
         yield decoder.decode(result.value, { stream: true });
       } catch (err) {
         clearTimeout(timer);

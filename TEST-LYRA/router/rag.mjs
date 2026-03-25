@@ -100,6 +100,7 @@ export async function findRelevantLinks(question, mcpServers, ragConfig, configN
 // --- Step 1: Flash Lite agent ---
 
 async function getToolCalls(question, ragConfig, configName, docsLibrary) {
+  log.debug(TAG, `Agent fetch: ${ragConfig.model} (timeout=${ragConfig.timeout}ms)`);
   const res = await withTimeout(
     fetch(`${ragConfig.base_url}/chat/completions`, {
       method: 'POST',
@@ -133,7 +134,8 @@ async function getToolCalls(question, ragConfig, configName, docsLibrary) {
   );
 
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
+  log.debug(TAG, `Agent HTTP ${res.status}, reading body...`);
+  const data = await withTimeout(res.json(), ragConfig.timeout);
   return data.choices?.[0]?.message?.tool_calls || null;
 }
 
