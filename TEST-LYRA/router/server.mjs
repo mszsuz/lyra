@@ -837,7 +837,7 @@ async function runAdapterChatManaged(session, text) {
                 if (event.text) {
                   if (accumulatedCostUsd > 0) {
                     event.cost_usd = (event.cost_usd || 0) + accumulatedCostUsd;
-                    event.cost_rub = Math.round(event.cost_usd * config.exchangeRate * 100) / 100;
+                    event.cost_rub = Math.round(event.cost_usd * (config.billingMultiplier || 1) * config.exchangeRate * 100) / 100;
                   }
                   handleAdapterEvent(session, event);
                   conversation.addAssistantMessage(session, event.text);
@@ -883,7 +883,7 @@ async function runAdapterChatManaged(session, text) {
               // Include accumulated cost from all turns
               if (accumulatedCostUsd > 0) {
                 event.cost_usd = (event.cost_usd || 0) + accumulatedCostUsd;
-                event.cost_rub = Math.round(event.cost_usd * config.exchangeRate * 100) / 100;
+                event.cost_rub = Math.round(event.cost_usd * (config.billingMultiplier || 1) * config.exchangeRate * 100) / 100;
               }
               handleAdapterEvent(session, event);
               conversation.addAssistantMessage(session, event.text);
@@ -1000,7 +1000,7 @@ function handleAdapterEvent(session, event) {
 
   // Add cost in rubles for Chat display
   if (event.type === 'assistant_end' && event.cost_usd) {
-    event.cost_rub = Math.round(event.cost_usd * config.exchangeRate * 100) / 100;
+    event.cost_rub = Math.round(event.cost_usd * (config.billingMultiplier || 1) * config.exchangeRate * 100) / 100;
   }
 
   // Publish to client
@@ -1062,7 +1062,7 @@ function spawnClaudeForSession(session, initialMessage, { resume = false } = {})
 
       // Add cost in rubles for Chat display
       if (event.type === 'assistant_end' && event.cost_usd) {
-        event.cost_rub = Math.round(event.cost_usd * config.exchangeRate * 100) / 100;
+        event.cost_rub = Math.round(event.cost_usd * (config.billingMultiplier || 1) * config.exchangeRate * 100) / 100;
       }
 
       // Forward universal protocol events to session channel
