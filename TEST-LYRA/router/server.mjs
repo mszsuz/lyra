@@ -17,6 +17,7 @@ import { processEvent as billingProcessEvent, billAccumulatedCost, initBilling }
 import * as conversation from './conversation.mjs';
 import { findRelevantLinks, warmup as ragWarmup } from './rag.mjs';
 import { writeHistory, moveSessionToUser } from './history.mjs';
+import { generateQR } from './qr.mjs';
 import * as log from './log.mjs';
 import { writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -294,13 +295,22 @@ async function handleHello(data, clientUUID) {
   // Session awaits mobile auth (QR scan)
   session.status = 'awaiting_auth';
 
-  // Publish hello_ack with mobile_jwt for QR display
+  // Generate QR code from mobile_jwt (server-side SVG, no external dependencies)
+  let qrSvg = '';
+  try {
+    qrSvg = await generateQR(mobileJwt);
+  } catch (err) {
+    log.error(TAG, `QR generation failed: ${err.message}`);
+  }
+
+  // Publish hello_ack with mobile_jwt + QR SVG
   const helloAck = {
     type: 'hello_ack',
     session_id: session.sessionId,
     status: 'new',
     chat_jwt: chatJwt,
     mobile_jwt: mobileJwt,
+    qr_svg: qrSvg,
   };
   await centrifugo.apiPublish(session.channel, helloAck);
   writeHistory(session, 'out', helloAck);

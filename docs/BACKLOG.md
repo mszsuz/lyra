@@ -9,7 +9,7 @@
 
 ## TODO по шагам
 
-- [ ] **QR-код в Chat** — `mobile_jwt` получен, но QR не рендерится (TODO в коде). QR генерировать на сервере (Роутер), отправлять готовое изображение (base64 PNG) в hello_ack — клиентские компы не должны делать внешние запросы к QR-сервисам. **Шаги 5-6**
+- [x] **QR-код в Chat** — ✅ 2026-03-27. QR генерируется на Роутере (npm `qrcode`), отправляется как SVG в `qr_svg` поле `hello_ack`. SVG с прозрачным фоном и `currentColor` — адаптируется к теме чата. Chat использует SVG напрямую, fallback на `api.qrserver.com` для старых версий Роутера
 - [x] **Мобильное приложение: убрать лишний subscribe** — убран `newSubscription('mobile:lobby')` и ручные подписки. publish через `client.publish()`. ~~Шаги 6-7~~
 - [x] **Мобильное приложение: fail-fast при пустом JWT** — `connectToLobby()` бросает `StateError`, регистрация показывает ошибку. ~~Шаги 6-7~~
 - [x] **Мобильное: publish без подписки** — `publish()` переписан на `client.publish(channel, data)` вместо создания подписки
@@ -18,7 +18,7 @@
 - [ ] **Глобальный LyraActiveChannel** — singleton-канал, межсессионная утечка при параллельных сессиях. Сделать маппинг `process_id -> channel`. **Фаза 2**
 - [x] **Resume Claude после краша** — `--resume` вместо `--session-id` при респавне, история диалога сохраняется. Фикс дедлока: сообщение сразу в stdin без ожидания init
 - [x] **Vega контекст в промпте** — `{{ VegaКонфигурация }}` + `{% Если %}` блок в system-prompt.md, merge allowedTools из vega.json
-- [ ] **Vega MCP отключён** — Claude CLI 2.1.74 зависает при подключении к HTTP MCP. `type: "streamable-http"` → "Invalid MCP configuration". Ждём фикса CLI
+- [x] **Vega MCP отключён** — ~~Claude CLI 2.1.74 зависает при HTTP MCP~~ Неактуально: архитектура перешла на OpenRouter + программный HTTP MCP-клиент (`mcp-client.mjs`). Claude CLI не используется для MCP
 
 ## Роли пользователей и адаптация промпта
 
