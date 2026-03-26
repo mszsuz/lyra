@@ -1,6 +1,6 @@
 // Profile loader — reads model.json, system-prompt.md, tools.json, vega.json
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as log from './log.mjs';
@@ -70,6 +70,16 @@ export function loadProfile(profilePath) {
     profile.systemReminderTemplate = '';
   }
 
+  // skills/ — investigation methodologies loaded into system prompt
+  const skillsDir = resolve(dir, 'skills');
+  if (existsSync(skillsDir)) {
+    const files = readdirSync(skillsDir).filter(f => f.endsWith('.md')).sort();
+    profile.skills = files.map(f => readFileSync(resolve(skillsDir, f), 'utf-8').trim()).join('\n\n---\n\n');
+    if (files.length) log.info(TAG, `skills loaded: ${files.join(', ')}`);
+  } else {
+    profile.skills = '';
+  }
+
   // tool-labels.json — human-readable descriptions for client UI
   const labelsPath = resolve(dir, 'tool-labels.json');
   if (existsSync(labelsPath)) {
@@ -126,6 +136,7 @@ export function renderSystemPrompt(template, session, profile) {
     'ИдентификаторКонфигурации': session.configId || '',
     'Режим': profile?.mode || 'user',
     'VegaКонфигурация': vegaConnected,
+    'Навыки': vegaConnected ? (profile?.skills || '') : '',
     'НапарникДоступен': session.naparnikToken ? 'да' : '',
     'ИмяПользователя': session.userName || '',
     'ПамятьКонфигурации': memoryRegistry,
