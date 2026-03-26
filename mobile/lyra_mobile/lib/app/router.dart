@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../app/theme.dart';
+import '../core/push_service.dart';
 import '../core/storage/secure_storage.dart';
 import '../features/registration/registration_screen.dart';
 import '../features/home/home_screen.dart';
@@ -44,14 +45,24 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   Future<void> _checkAuth() async {
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
+
+    // Инициализация push-уведомлений
+    final pushService = ref.read(pushServiceProvider);
+    await pushService.initialize();
+
     final storage = ref.read(secureStorageProvider);
-    final userId = await storage.getUserId();
+    var userId = await storage.getUserId();
     if (!mounted) return;
-    if (userId != null) {
-      context.go('/home');
-    } else {
-      context.go('/registration');
+
+    if (userId == null) {
+      // Авто-регистрация: device_id = user_id
+      final deviceId = await storage.getOrCreateDeviceId();
+      await storage.saveUserId(deviceId);
+      // MDM-регистрация (register в mobile:lobby) произойдёт при первом
+      // подключении к Centrifugo — отложенная, не блокирует запуск.
     }
+
+    context.go('/home');
   }
 
   @override

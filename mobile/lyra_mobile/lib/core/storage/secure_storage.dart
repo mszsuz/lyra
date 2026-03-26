@@ -94,6 +94,16 @@ class SecureStorage {
     await _storage.write(key: _keyUserRole, value: role);
   }
 
+  static const _keyFcmToken = 'lyra_fcm_token';
+
+  Future<String?> getFcmToken() async {
+    return _storage.read(key: _keyFcmToken);
+  }
+
+  Future<void> saveFcmToken(String token) async {
+    await _storage.write(key: _keyFcmToken, value: token);
+  }
+
   static const _keyBalance = 'lyra_balance';
   static const _keyAutoScanner = 'lyra_auto_scanner';
 

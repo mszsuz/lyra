@@ -37,6 +37,7 @@ TEST-LYRA/var/
 TEST-LYRA/memory/
 TEST-LYRA/centrifugo/centrifugo.exe
 TEST-LYRA/router/router.pid
+TEST-LYRA/router/firebase-service-account.json
 
 # Архив и временные файлы
 _LEGASY/

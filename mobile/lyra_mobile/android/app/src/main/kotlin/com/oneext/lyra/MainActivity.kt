@@ -1,4 +1,4 @@
-package com.example.lyra_mobile
+package com.oneext.lyra
 
 import io.flutter.embedding.android.FlutterActivity
 

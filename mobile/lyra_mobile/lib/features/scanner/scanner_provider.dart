@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/balance_provider.dart';
 import '../../core/centrifugo/centrifugo_client.dart';
 import '../../core/centrifugo/message_types.dart';
 import '../../core/storage/secure_storage.dart';
@@ -44,11 +43,10 @@ class ScannerState {
 class ScannerNotifier extends StateNotifier<ScannerState> {
   final CentrifugoClient _centrifugo;
   final SecureStorage _storage;
-  final BalanceNotifier _balance;
   StreamSubscription<IncomingMessage>? _messagesSub;
   String _currentMobileJwt = '';
 
-  ScannerNotifier(this._centrifugo, this._storage, this._balance)
+  ScannerNotifier(this._centrifugo, this._storage)
       : super(const ScannerState());
 
   Future<void> onQrScanned(String qrData) async {
@@ -152,11 +150,9 @@ class ScannerNotifier extends StateNotifier<ScannerState> {
             :final status,
             :final configName,
             :final created,
-            :final balance,
-            :final currency,
           ):
         if (status == 'ok') {
-          if (balance != null) _balance.update(balance);
+          // Баланс из auth_ack обновляется глобально через BalanceNotifier
 
           // Remove old sessions to the same database
           final cn = configName ?? '';
@@ -192,10 +188,11 @@ class ScannerNotifier extends StateNotifier<ScannerState> {
           :final balance,
           :final currency,
         ):
-        _balance.update(balance);
+        // Баланс обновляется глобально через BalanceNotifier (слушает messages)
         if (state.session != null &&
             state.session!.sessionId == sessionId) {
           final updated = state.session!.copyWith(
+            balance: balance,
             currency: currency,
           );
           _storage.saveSession(updated);
@@ -234,6 +231,5 @@ final scannerProvider =
     StateNotifierProvider.autoDispose<ScannerNotifier, ScannerState>((ref) {
   final centrifugo = ref.watch(centrifugoClientProvider);
   final storage = ref.watch(secureStorageProvider);
-  final balance = ref.read(balanceProvider.notifier);
-  return ScannerNotifier(centrifugo, storage, balance);
+  return ScannerNotifier(centrifugo, storage);
 });
