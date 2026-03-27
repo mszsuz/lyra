@@ -1,4 +1,4 @@
 {
-  "ws": "ws://ru.tuna.am:25837/connection/websocket",
+  "ws": "ws://ru.tuna.am:35773/connection/websocket",
   "version": 1
 }
