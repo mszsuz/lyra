@@ -42,8 +42,9 @@ class CentrifugoClient {
       );
     }
 
+    final wsUrl = await CentrifugoConfig.getWsUrl();
     _client = centrifuge.createClient(
-      CentrifugoConfig.wsUrl,
+      wsUrl,
       centrifuge.ClientConfig(
         token: jwt,
       ),
@@ -72,8 +73,9 @@ class CentrifugoClient {
   Future<void> connectToSession(String mobileJwt) async {
     await disconnect();
 
+    final wsUrl = await CentrifugoConfig.getWsUrl();
     _client = centrifuge.createClient(
-      CentrifugoConfig.wsUrl,
+      wsUrl,
       centrifuge.ClientConfig(
         token: mobileJwt,
       ),

@@ -52,6 +52,10 @@
 
 Общий JWT для lobby зашит в обработку. При hello Роутер возвращает персональный chat_jwt — Чат переподключается с ним.
 
+**Адрес Centrifugo — из удалённого конфига (connect.json):** При открытии обработка загружает `connect.json` с GitHub (`https://raw.githubusercontent.com/mszsuz/lyra/master/connect.json`) через `МодульСессия.ПолучитьАдресИзУдалённогоКонфига()` (серверная функция, `HTTPСоединение`). Файл содержит WebSocket URL. При недоступности GitHub — fallback на зашитый URL. Позволяет менять адрес Centrifugo без пересборки EPF.
+
+**Внешний доступ — Tuna TCP tunnel:** Centrifugo слушает на `localhost:11911`, внешний доступ через TCP-tunnel `ru.tuna.am:35773` (статический порт, зарезервирован в дашборде Tuna). Запуск: `tuna tcp 11911 --port=lyra`, работает как Windows-сервис. TCP, а не HTTP tunnel — HTTP tunnel Tuna модифицирует регистр заголовка `Sec-WebSocket-Accept` → boost.beast в тонком клиенте 1С отклоняет handshake. TCP пробрасывает сырые байты без модификации.
+
 **Два канала:**
 
 | Канал | Назначение |
@@ -79,7 +83,7 @@
 **Флоу подключения:**
 
 1. Обработка открывается — собирает данные о базе (конфигурация, версия, компьютер, строка подключения)
-2. Подключается к Centrifugo по WebSocket (`ws://host:11000/connection/websocket`), отправляет `connect` с общим JWT (lobby)
+2. Загружает WebSocket URL из `connect.json` (GitHub) → fallback на зашитый URL. Подключается к Centrifugo по WebSocket, отправляет `connect` с общим JWT (lobby)
 3. Публикует `hello` с данными о базе в `session:lobby` (subscribe не нужен — `allow_publish_for_client: true`)
 4. Роутер возвращает `hello_ack` с `chat_jwt`, `mobile_jwt`, статус `awaiting_auth`
 5. Чат переподключается к Centrifugo с `chat_jwt` (персональный канал сессии)
