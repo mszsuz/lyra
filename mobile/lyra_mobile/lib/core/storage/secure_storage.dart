@@ -94,14 +94,25 @@ class SecureStorage {
     await _storage.write(key: _keyUserRole, value: role);
   }
 
-  static const _keyFcmToken = 'lyra_fcm_token';
+  static const _keyUserJwt = 'lyra_user_jwt';
 
-  Future<String?> getFcmToken() async {
-    return _storage.read(key: _keyFcmToken);
+  Future<String?> getUserJwt() async {
+    return _storage.read(key: _keyUserJwt);
   }
 
-  Future<void> saveFcmToken(String token) async {
-    await _storage.write(key: _keyFcmToken, value: token);
+  Future<void> saveUserJwt(String jwt) async {
+    await _storage.write(key: _keyUserJwt, value: jwt);
+  }
+
+  /// Очистить auth-данные, сохранив device_id и session cache.
+  Future<void> clearAuth() async {
+    await _storage.delete(key: _keyUserId);
+    await _storage.delete(key: _keyUserJwt);
+  }
+
+  Future<void> clearSessionCache() async {
+    await _storage.delete(key: _keySessions);
+    await _storage.delete(key: _keyAutoScanner);
   }
 
   static const _keyBalance = 'lyra_balance';

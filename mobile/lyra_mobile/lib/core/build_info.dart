@@ -1,1 +1,1 @@
-const buildNumber = '20260320-mobile-v7';
+const buildNumber = '20260327-mobile-v30';

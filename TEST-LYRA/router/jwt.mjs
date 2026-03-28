@@ -29,6 +29,35 @@ export function makeSessionJWTs(sessionId, secret) {
   return { chatJwt, mobileJwt, channel };
 }
 
+export function makeRoomJWTs(sessionId, secret) {
+  const now = Math.floor(Date.now() / 1000);
+  const exp = now + 365 * 24 * 3600;
+  const channel = `room:${sessionId}`;
+
+  const roomJwt = generateJWT({
+    sub: `chat-${sessionId}`,
+    channels: [channel],
+    exp,
+  }, secret);
+
+  const mobileJwt = generateJWT({
+    sub: `mobile-${sessionId}`,
+    channels: [channel],
+    exp,
+  }, secret);
+
+  return { roomJwt, mobileJwt, channel };
+}
+
+export function makeUserJWT(userId, secret) {
+  const now = Math.floor(Date.now() / 1000);
+  return generateJWT({
+    sub: `user-${userId}`,
+    channels: [`user:${userId}`],
+    exp: now + 365 * 24 * 3600,
+  }, secret);
+}
+
 export function makeRouterJWT(secret, channels = []) {
   const now = Math.floor(Date.now() / 1000);
   const payload = {

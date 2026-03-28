@@ -70,7 +70,7 @@ function extractAttachments(session, data) {
 }
 
 // Fields that must never be written to log
-const SENSITIVE_KEYS = ['naparnik_token', 'chat_jwt', 'mobile_jwt', 'token', 'api_key', 'secret'];
+const SENSITIVE_KEYS = ['naparnik_token', 'chat_jwt', 'room_jwt', 'mobile_jwt', 'user_jwt', 'token', 'api_key', 'secret'];
 
 function stripSensitive(obj) {
   if (!obj || typeof obj !== 'object') return obj;

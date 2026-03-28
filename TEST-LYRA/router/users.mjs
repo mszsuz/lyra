@@ -1,10 +1,10 @@
 // User management — profile + database registry + per-database settings
 // Structure:
-//   .users/<userId>/profile.json     — user-level settings (name, level, token)
+//   .users/<userId>/profile.json     — user-level settings (name, level, token, device_id)
 //   .users/<userId>/databases.json   — registry [{base_ids, db_name, settings_file}]
 //   .users/<userId>/db-<id>.json      — per-database settings (id = stable UUID)
 
-import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -13,28 +13,106 @@ import * as log from './log.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TAG = 'users';
 
-const users = new Map();
+// device_id → user_id mapping (loaded from disk at startup)
+const deviceToUser = new Map();
 
-export function verifyAuth(userId, deviceId) {
-  // MVP: accept all auths, create user on the fly
-  if (!userId) return { ok: false, reason: 'missing user_id' };
+/**
+ * Load device_id → user_id mapping from existing profile.json files.
+ * Called once at startup.
+ */
+export function listKnownUserIds() {
+  return [...new Set(deviceToUser.values())];
+}
 
-  if (!users.has(userId)) {
-    users.set(userId, { userId, deviceId, created: Date.now() });
-    log.info(TAG, `New user registered: ${userId}`);
+export function loadDeviceMapping() {
+  const usersRoot = resolve(process.env.LYRA_DATA_DIR || __dirname, 'users');
+  if (!existsSync(usersRoot)) return;
+
+  let count = 0;
+  for (const entry of readdirSync(usersRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const profilePath = resolve(usersRoot, entry.name, 'profile.json');
+    const profile = readJSON(profilePath);
+    if (profile && profile.device_id) {
+      deviceToUser.set(profile.device_id, entry.name);
+      count++;
+    }
   }
-  return { ok: true };
+  log.info(TAG, `Loaded ${count} device→user mappings`);
+}
+
+/**
+ * Register user by device_id.
+ * Known device_id → return existing user_id.
+ * New device_id → create user_id, save mapping.
+ */
+export function registerByDeviceId(deviceId) {
+  if (!deviceId) return { ok: false, reason: 'missing device_id' };
+
+  const existingUserId = deviceToUser.get(deviceId);
+  if (existingUserId) {
+    log.info(TAG, `Known device ${deviceId} → user ${existingUserId}`);
+    return { ok: true, userId: existingUserId, isNew: false };
+  }
+
+  // New device — create user
+  const userId = randomUUID();
+  const profile = {
+    device_id: deviceId,
+    created_at: new Date().toISOString(),
+  };
+  saveProfile(userId, profile);
+  deviceToUser.set(deviceId, userId);
+  log.info(TAG, `New user registered: ${userId} (device=${deviceId})`);
+  return { ok: true, userId, isNew: true };
+}
+
+/**
+ * Verify auth: check that device_id is linked to user_id.
+ * Migration: if user exists but has no device_id yet — bind on first auth.
+ */
+export function verifyAuth(userId, deviceId) {
+  if (!userId) return { ok: false, reason: 'missing user_id' };
+  if (!deviceId) return { ok: false, reason: 'missing device_id' };
+
+  const linkedUser = deviceToUser.get(deviceId);
+  if (linkedUser) {
+    if (linkedUser !== userId) {
+      log.warn(TAG, `Auth failed: device ${deviceId} belongs to ${linkedUser}, not ${userId}`);
+      return { ok: false, reason: 'device_user_mismatch' };
+    }
+    return { ok: true };
+  }
+
+  // device_id unknown — check if user exists and has no device_id (migration)
+  const profile = getProfile(userId);
+  if (Object.keys(profile).length === 0) {
+    log.warn(TAG, `Auth failed: unknown user_id=${userId}`);
+    return { ok: false, reason: 'unknown_user' };
+  }
+
+  if (!profile.device_id) {
+    // Migration: existing user without device_id — bind this device
+    profile.device_id = deviceId;
+    saveProfile(userId, profile);
+    deviceToUser.set(deviceId, userId);
+    log.info(TAG, `Migration: bound device ${deviceId} → user ${userId}`);
+    return { ok: true };
+  }
+
+  // User has a different device_id already
+  log.warn(TAG, `Auth failed: unknown device_id=${deviceId} for user ${userId}`);
+  return { ok: false, reason: 'unknown_device' };
 }
 
 export function getUser(userId) {
-  return users.get(userId) || null;
+  const profile = getProfile(userId);
+  return Object.keys(profile).length > 0 ? { userId, ...profile } : null;
 }
-
-const INITIAL_BALANCE = 100;
 
 export function checkBalance(userId) {
   const profile = getProfile(userId);
-  const balance = profile.balance ?? INITIAL_BALANCE;
+  const balance = profile.balance ?? 0;
   return { ok: balance > 0, balance };
 }
 
@@ -46,7 +124,7 @@ export function setExchangeRate(rate) {
 
 export function deductBalance(userId, costUsd, sessionId, providerCostUsd) {
   const profile = getProfile(userId);
-  if (profile.balance === undefined) profile.balance = INITIAL_BALANCE;
+  if (profile.balance === undefined) profile.balance = 0;
   const costRub = Math.round(costUsd * usdToRub * 100) / 100;
   profile.balance = Math.round((profile.balance - costRub) * 100) / 100;
   saveProfile(userId, profile);
@@ -231,6 +309,11 @@ export function saveUserSettings(userId, settings, baseIds) {
   }
   if (settings.user_level !== undefined) {
     profile.user_level = settings.user_level;
+    profileChanged = true;
+  }
+  if (settings.device_id !== undefined) {
+    profile.device_id = settings.device_id;
+    deviceToUser.set(settings.device_id, userId);
     profileChanged = true;
   }
   if (settings.phone !== undefined) {

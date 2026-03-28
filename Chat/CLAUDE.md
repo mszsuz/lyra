@@ -56,20 +56,21 @@
 
 **Внешний доступ — Tuna TCP tunnel:** Centrifugo слушает на `localhost:11911`, внешний доступ через TCP-tunnel `ru.tuna.am:35773` (статический порт, зарезервирован в дашборде Tuna). Запуск: `tuna tcp 11911 --port=lyra`, работает как Windows-сервис. TCP, а не HTTP tunnel — HTTP tunnel Tuna модифицирует регистр заголовка `Sec-WebSocket-Accept` → boost.beast в тонком клиенте 1С отклоняет handshake. TCP пробрасывает сырые байты без модификации.
 
-**Два канала:**
+**Каналы:**
 
-| Канал | Назначение |
-|-------|-----------|
-| `session:lobby` (общий) | hello-рукопожатие. Общий JWT зашит в обработку |
-| Канал сессии (персональный) | Создаётся Роутером. Доступ через chat_jwt (для Чата) / mobile_jwt (для мобильного) |
+| Канал | Тип | Назначение |
+|-------|-----|-----------|
+| `session:lobby` | entry | Молчаливый вход. Общий JWT зашит в обработку. Данные не публикуются |
+| `session:<clientUUID>` | bootstrap | Персональный канал для hello/hello_ack. Создаётся роутером при join |
+| `room:<sessionId>` | work | Рабочий канал сессии: chat, auth, balance, Claude |
 
 **JWT-схема:**
 
 | JWT        | Откуда                    | Назначение                                                    |
 |------------|---------------------------|---------------------------------------------------------------|
-| Общий JWT  | Зашит в EPF               | Только для lobby — connect к Centrifugo, publish hello        |
-| chat_jwt   | От Роутера (в hello_ack)  | Переподключение к Centrifugo для канала сессии (Чат). Содержит `channels: ["session:<session_id>"]`, срок жизни 1 год |
-| mobile_jwt | От Роутера (в hello_ack)  | Кодируется в QR, мобильное подключается с ним к каналу сессии. Содержит `channels: ["session:<session_id>"]`, срок жизни 1 год |
+| Общий JWT  | Зашит в EPF               | Содержит `channels: ["session:lobby"]`. Авто-подписка при connect |
+| room_jwt   | От Роутера (в hello_ack)  | Переподключение к `room:<session_id>`. Срок жизни 1 год |
+| mobile_jwt | От Роутера (в hello_ack)  | Кодируется в QR. Содержит `channels: ["room:<session_id>"]`, срок жизни 1 год |
 
 **Протокол Centrifugo (JSON поверх WebSocket):**
 
@@ -83,16 +84,17 @@
 **Флоу подключения:**
 
 1. Обработка открывается — собирает данные о базе (конфигурация, версия, компьютер, строка подключения)
-2. Загружает WebSocket URL из `connect.json` (GitHub) → fallback на зашитый URL. Подключается к Centrifugo по WebSocket, отправляет `connect` с общим JWT (lobby)
-3. Публикует `hello` с данными о базе в `session:lobby` (subscribe не нужен — `allow_publish_for_client: true`)
-4. Роутер возвращает `hello_ack` с `chat_jwt`, `mobile_jwt`, статус `awaiting_auth`
-5. Чат переподключается к Centrifugo с `chat_jwt` (персональный канал сессии)
-6. Чат отображает QR-код = `mobile_jwt` (срок жизни 1 год), ввод заблокирован
-7. Мобильное приложение сканирует QR — подключается к Centrifugo с `mobile_jwt` — отправляет `{user_id, device_id}`
-8. Роутер завершает авторизацию — `auth_ack ok` → QR заменяется на «Лира на связи!», ввод разблокирован
-9. Канал сессии остаётся на всю сессию (нет переключения на другой канал)
+2. Загружает WebSocket URL из `connect.json` (GitHub) → fallback на зашитый URL
+3. Подключается к Centrifugo с общим JWT (авто-подписка на `session:lobby` через channels claim)
+4. Роутер видит join → создаёт bootstrap-канал `session:<clientUUID>`, подписывает чат через Server API
+5. Чат получает `push.subscribe` на bootstrap-канал → публикует `hello` туда (не в lobby)
+6. Роутер отвечает `hello_ack` с `room_jwt`, `mobile_jwt` в bootstrap-канал
+7. Чат переподключается к Centrifugo с `room_jwt` (авто-подписка на `room:<sessionId>`)
+8. Чат отображает QR-код = `mobile_jwt` (срок жизни 1 год), ввод заблокирован
+9. Мобильное сканирует QR → подключается с `mobile_jwt` → auth → `auth_ack ok` → «Лира на связи!»
+10. Канал `room:<sessionId>` остаётся на всю сессию
 
-**Переподключение** определяется по `form_id` (UUID формы, `ЭтотОбъект.УникальныйИдентификатор`). `form_id` включается во все сообщения от Чата (`hello`, `chat`). Если `form_id` известен Роутеру и сессия жива (TTL 30 мин) — `hello_ack` с `status: reconnected`, новый `chat_jwt`, без QR. Закрытие формы = новый `form_id` = новая сессия.
+**Переподключение** определяется по `form_id` (UUID формы, `ЭтотОбъект.УникальныйИдентификатор`). `form_id` включается во все сообщения от Чата (`hello`, `chat`). Если `form_id` известен Роутеру и сессия жива (TTL 30 мин) — `hello_ack` с `status: reconnected`, новый `room_jwt`, без QR. Закрытие формы = новый `form_id` = новая сессия.
 
 ## Данные о базе (hello)
 

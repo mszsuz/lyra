@@ -14,6 +14,8 @@ export class CentrifugoClient {
     this.cmdId = 1;
     this.handlers = [];       // [{predicate, resolve, reject, timer}]
     this.pushHandler = null;  // onPush callback
+    this.joinHandler = null;  // onJoin callback
+    this.leaveHandler = null; // onLeave callback
     this.connected = false;
     this._reconnectTimer = null;
     this._token = null;
@@ -124,6 +126,14 @@ export class CentrifugoClient {
     this.pushHandler = callback;
   }
 
+  onJoin(callback) {
+    this.joinHandler = callback;
+  }
+
+  onLeave(callback) {
+    this.leaveHandler = callback;
+  }
+
   onReconnect(callback) {
     this._onReconnect = callback;
   }
@@ -134,8 +144,14 @@ export class CentrifugoClient {
     return this._apiCall('publish', { channel, data });
   }
 
-  async apiSubscribe(user, client, channel) {
-    return this._apiCall('subscribe', { user, client, channel });
+  async apiSubscribe(user, client, channel, data) {
+    const params = { user, client, channel };
+    if (data !== undefined) params.data = data;
+    return this._apiCall('subscribe', params);
+  }
+
+  async apiUnsubscribe(user, client, channel) {
+    return this._apiCall('unsubscribe', { user, client, channel });
   }
 
   async _apiCall(method, params) {
@@ -148,7 +164,11 @@ export class CentrifugoClient {
       const text = await res.text();
       throw new Error(`Centrifugo API ${method} error ${res.status}: ${text}`);
     }
-    return res.json();
+    const body = await res.json();
+    if (body.error) {
+      throw new Error(`Centrifugo API ${method}: ${body.error.message} (code ${body.error.code})`);
+    }
+    return body;
   }
 
   // --- Internal ---
@@ -173,9 +193,11 @@ export class CentrifugoClient {
       }
     }
 
-    // Push message
-    if (msg.push && this.pushHandler) {
-      this.pushHandler(msg.push);
+    // Push messages: pub, join, leave
+    if (msg.push) {
+      if (msg.push.pub && this.pushHandler)    this.pushHandler(msg.push);
+      if (msg.push.join && this.joinHandler)   this.joinHandler(msg.push.channel, msg.push.join.info);
+      if (msg.push.leave && this.leaveHandler) this.leaveHandler(msg.push.channel, msg.push.leave.info);
     }
   }
 

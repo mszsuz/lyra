@@ -5,12 +5,12 @@
 import { loadConfig } from './config.mjs';
 import { CentrifugoClient } from './centrifugo.mjs';
 import { SessionManager } from './sessions.mjs';
-import { makeSessionJWTs, makeRouterJWT } from './jwt.mjs';
+import { makeSessionJWTs, makeRoomJWTs, makeUserJWT, makeRouterJWT } from './jwt.mjs';
 import { loadProfile, writeTempFiles, renderSystemPrompt } from './profiles.mjs';
 import { spawnClaude } from './claude.mjs';
 import { createAdapter } from './adapters/index.mjs';
 import { createToolServer, handleToolResult } from './tools.mjs';
-import { verifyAuth, checkBalance, getUserConfig, saveUserSettings } from './users.mjs';
+import { verifyAuth, registerByDeviceId, checkBalance, getUserConfig, saveUserSettings, loadDeviceMapping, listKnownUserIds } from './users.mjs';
 import { sanitizeText } from './protocol.mjs';
 import { executeTool } from './tool-execution.mjs';
 import { processEvent as billingProcessEvent, billAccumulatedCost, initBilling } from './billing.mjs';
@@ -23,8 +23,6 @@ import { writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
-
 const TAG = 'server';
 
 // --- PID file (single-instance guard) ---
@@ -78,6 +76,7 @@ initBilling(config);
 log.setLevel(config.logLevel);
 log.setLogFile(resolve(config.dataDir, 'var', 'router.log'));
 log.info(TAG, 'Starting Lyra Router');
+loadDeviceMapping();
 
 let profile = loadProfile(config.profilePath);
 const sessions = new SessionManager(config.sessionTTL, {
@@ -136,14 +135,114 @@ try {
   process.exit(1);
 }
 
-// Re-subscribe router to all active session channels after Centrifugo reconnect
-centrifugo.onReconnect(() => {
+// Subscribe to known user channels (bounded parallelism)
+async function subscribeKnownUsers({ concurrency = 20 } = {}) {
+  const userIds = listKnownUserIds();
+  if (!userIds.length) return;
+  log.info(TAG, `Subscribing to ${userIds.length} known user channels`);
+  const queue = [...userIds];
+  const workers = [];
+  for (let i = 0; i < Math.min(concurrency, queue.length); i++) {
+    workers.push((async () => {
+      while (queue.length > 0) {
+        const userId = queue.shift();
+        try {
+          await centrifugo.apiSubscribe('router-1', centrifugo.clientId, `user:${userId}`);
+        } catch (err) {
+          log.warn(TAG, `Failed to subscribe to user:${userId}: ${err.message}`);
+        }
+      }
+    })());
+  }
+  await Promise.all(workers);
+  log.info(TAG, `Subscribed to ${userIds.length} user channels`);
+}
+
+// Initial subscription to user channels
+await subscribeKnownUsers();
+
+// Re-subscribe router to all active channels after Centrifugo reconnect
+centrifugo.onReconnect(async () => {
   const activeSessions = sessions.getAll();
-  log.info(TAG, `Reconnect: re-subscribing to ${activeSessions.length} session channels`);
+  log.info(TAG, `Reconnect: re-subscribing to ${activeSessions.length} room + user channels`);
   for (const s of activeSessions) {
     centrifugo.apiSubscribe('router-1', centrifugo.clientId, s.channel).catch(err => {
       log.error(TAG, `Reconnect re-subscribe failed for ${s.channel}: ${err.message}`);
     });
+  }
+  await subscribeKnownUsers().catch(err => {
+    log.error(TAG, `Reconnect user subscribe failed: ${err.message}`);
+  });
+});
+
+// --- Bootstrap infrastructure ---
+
+const pendingBootstraps = new Map();
+// key: clientUUID → { kind: 'chat'|'mobile', channel, state: 'waiting_message'|'acked', timer }
+
+async function bootstrapChat(clientUUID) {
+  if (pendingBootstraps.has(clientUUID)) return; // duplicate join
+  const channel = `session:${clientUUID}`;
+  try {
+    await centrifugo.apiSubscribe('router-1', centrifugo.clientId, channel);
+    await centrifugo.apiSubscribe('lobby-user', clientUUID, channel);
+  } catch (err) {
+    log.error(TAG, `Bootstrap subscribe failed for chat ${clientUUID}: ${err.message}`);
+    return;
+  }
+  const timer = setTimeout(() => {
+    log.warn(TAG, `Bootstrap timeout for chat ${clientUUID}`);
+    cleanupBootstrap(clientUUID);
+  }, 30000);
+  pendingBootstraps.set(clientUUID, { kind: 'chat', channel, state: 'waiting_message', timer });
+  log.info(TAG, `Bootstrap created for chat: ${channel}`);
+}
+
+async function bootstrapMobile(clientUUID) {
+  if (pendingBootstraps.has(clientUUID)) return; // duplicate join
+  const channel = `mobile:${clientUUID}`;
+  try {
+    await centrifugo.apiSubscribe('router-1', centrifugo.clientId, channel);
+    await centrifugo.apiSubscribe('mobile-lobby', clientUUID, channel);
+  } catch (err) {
+    log.error(TAG, `Bootstrap subscribe failed for mobile ${clientUUID}: ${err.message}`);
+    return;
+  }
+  const timer = setTimeout(() => {
+    log.warn(TAG, `Bootstrap timeout for mobile ${clientUUID}`);
+    cleanupBootstrap(clientUUID);
+  }, 30000);
+  pendingBootstraps.set(clientUUID, { kind: 'mobile', channel, state: 'waiting_message', timer });
+  log.info(TAG, `Bootstrap created for mobile: ${channel}`);
+}
+
+async function cleanupBootstrap(clientUUID) {
+  const entry = pendingBootstraps.get(clientUUID);
+  if (!entry) return;
+  clearTimeout(entry.timer);
+  try {
+    await centrifugo.apiUnsubscribe('router-1', centrifugo.clientId, entry.channel);
+  } catch (err) {
+    log.warn(TAG, `Bootstrap cleanup unsubscribe failed: ${err.message}`);
+  }
+  pendingBootstraps.delete(clientUUID);
+  log.info(TAG, `Bootstrap cleaned up: ${entry.channel}`);
+}
+
+// --- Join/Leave handlers ---
+
+centrifugo.onJoin((channel, info) => {
+  if (!info || info.user === 'router-1') return;
+  if (channel === 'session:lobby') bootstrapChat(info.client);
+  if (channel === 'mobile:lobby')  bootstrapMobile(info.client);
+});
+
+centrifugo.onLeave((channel, info) => {
+  if (!info || info.user === 'router-1') return;
+  if (!channel.startsWith('session:') && !channel.startsWith('mobile:')) return;
+  if (pendingBootstraps.has(info.client)) {
+    log.info(TAG, `Client ${info.client} left bootstrap channel ${channel}`);
+    cleanupBootstrap(info.client);
   }
 });
 
@@ -153,169 +252,149 @@ centrifugo.onPush((push) => {
   const channel = push.channel;
   const data = push.pub?.data;
   if (!data || !data.type) return;
-
   const clientUUID = push.pub?.info?.client;
 
-  // --- session:lobby ---
-  if (channel === 'session:lobby') {
-    if (data.type === 'hello') {
-      // Dedup by Centrifugo client UUID (unique per WS connection).
-      // 1C Chat sends multiple hellos from one connection — only first passes.
-      // Reconnect = new WS connection = new clientUUID, so reconnect is not affected.
-      const dedup = clientUUID || data.form_id;
-      if (dedup) {
-        if (_pendingHellos.has(dedup)) {
-          log.info(TAG, `Duplicate hello ignored: client=${clientUUID}`);
-          return;
-        }
-        _pendingHellos.add(dedup);
-        setTimeout(() => _pendingHellos.delete(dedup), 10000);
-      }
-      handleHello(data, clientUUID);
+  // --- Lobbies: silent ---
+  if (channel === 'session:lobby' || channel === 'mobile:lobby') return;
+
+  // --- Bootstrap: session:<clientUUID> ---
+  // --- Bootstrap: session:<clientUUID> ---
+  if (channel.startsWith('session:')) {
+    const bootstrapClientId = channel.slice('session:'.length);
+    const entry = pendingBootstraps.get(bootstrapClientId);
+    if (entry && entry.kind === 'chat' && data.type === 'hello') {
+      handleHelloBootstrap(bootstrapClientId, data, clientUUID);
     }
     return;
   }
 
-  // --- mobile:lobby ---
-  if (channel === 'mobile:lobby') {
-    if (data.type === 'register') handleMobileRegister(data, clientUUID);
-    if (data.type === 'confirm') handleMobileConfirm(data, clientUUID);
-    if (data.type === 'get_sessions') handleGetSessions(data, clientUUID);
+  // --- Bootstrap: mobile:<clientUUID> ---
+  if (channel.startsWith('mobile:')) {
+    const bootstrapClientId = channel.slice('mobile:'.length);
+    const entry = pendingBootstraps.get(bootstrapClientId);
+    if (entry && entry.kind === 'mobile' && data.type === 'register') {
+      handleRegisterBootstrap(bootstrapClientId, data, clientUUID);
+    }
     return;
   }
 
-  // --- session:* (session channels) ---
-  if (channel.startsWith('session:')) {
+  // --- room:<sessionId> (session work) ---
+  if (channel.startsWith('room:')) {
     const session = sessions.getByChannel(channel);
     if (!session) return;
 
     writeHistory(session, 'in', data);
 
-    // Обновлять lastActivity только при действиях пользователя (не при push от Роутера)
     if (['chat', 'tool_result', 'auth', 'abort', 'disconnect', 'settings_save'].includes(data.type)) {
       sessions.touch(session.sessionId);
     }
 
     switch (data.type) {
-      case 'chat':
-        handleChat(session, data);
-        break;
-      case 'tool_result':
-        handleToolResult(session, data);
-        break;
-      case 'auth':
-        handleAuth(session, data);
-        break;
-      case 'abort':
-        handleAbort(session);
-        break;
-      case 'disconnect':
-        handleDisconnect(session);
-        break;
-      case 'settings_save':
-        handleSettingsSave(session, data);
-        break;
+      case 'chat':          handleChat(session, data);          break;
+      case 'tool_result':   handleToolResult(session, data);    break;
+      case 'auth':          handleAuth(session, data);          break;
+      case 'abort':         handleAbort(session);               break;
+      case 'disconnect':    handleDisconnect(session);          break;
+      case 'settings_save': handleSettingsSave(session, data);  break;
     }
+    return;
+  }
+
+  // --- user:<userId> (account operations) ---
+  if (channel.startsWith('user:')) {
+    const userId = channel.slice('user:'.length);
+    switch (data.type) {
+      case 'get_sessions': handleGetSessionsUser(userId, data); break;
+      // Этап 3: get_profile, bind_email, confirm_email
+    }
+    return;
   }
 });
 
-// --- Hello ---
+// --- Hello (bootstrap channel) ---
 
-const _pendingHellos = new Set(); // guard against concurrent hellos with same form_id
-const _pendingRegistrations = new Map(); // reg_id → { phone, deviceId, code, clientUUID, attempts, created }
-const _phoneToUser = new Map(); // phone → userId (in-memory cache for re-registration)
+async function handleHelloBootstrap(bootstrapClientId, data, clientUUID) {
+  const entry = pendingBootstraps.get(bootstrapClientId);
+  if (!entry) return;
+  if (entry.state !== 'waiting_message') {
+    log.info(TAG, `Duplicate hello ignored for bootstrap ${bootstrapClientId}`);
+    return;
+  }
+  entry.state = 'acked';
 
-async function handleHello(data, clientUUID) {
-  log.info(TAG, `hello from client=${clientUUID}`, {
+  log.info(TAG, `hello from bootstrap ${entry.channel}`, {
     config: data.config_name || data.configuration,
     form_id: data.form_id,
   });
 
-  // Check for reconnect by form_id
-  if (data.form_id) {
-    const existing = sessions.getByFormId(data.form_id);
-    if (existing) {
-      log.info(TAG, `Reconnect: form_id=${data.form_id}, session=${existing.sessionId}`);
-
-      // Generate new chat_jwt for reconnected client
-      const { chatJwt } = makeSessionJWTs(existing.sessionId, config.centrifugo.hmacSecret);
-      existing.chatJwt = chatJwt;
-      existing.clientId = clientUUID;
-      existing.status = existing.userId ? 'active' : 'awaiting_auth';
-
-      // Subscribe client to session channel and send hello_ack
-      try {
-        await centrifugo.apiSubscribe('lobby-user', clientUUID, existing.channel);
-      } catch (err) {
-        log.error(TAG, `Reconnect subscribe error: ${err.message}`);
+  try {
+    // Check for reconnect by form_id
+    let session;
+    let isReconnect = false;
+    if (data.form_id) {
+      const existing = sessions.getByFormId(data.form_id);
+      if (existing) {
+        session = existing;
+        isReconnect = true;
+        session.clientId = clientUUID;
+        session.status = session.userId ? 'active' : 'awaiting_auth';
+        log.info(TAG, `Reconnect: form_id=${data.form_id}, session=${session.sessionId}`);
       }
-
-      const reconnectAck = {
-        type: 'hello_ack',
-        session_id: existing.sessionId,
-        status: 'reconnected',
-        chat_jwt: chatJwt,
-        // No mobile_jwt/QR on reconnect
-      };
-      await centrifugo.apiPublish(existing.channel, reconnectAck);
-      writeHistory(existing, 'in', data);
-      writeHistory(existing, 'out', reconnectAck);
-
-      // If active and Claude not running — respawn with resume
-      if (existing.status === 'active' && !existing.claudeProcess) {
-        spawnClaudeForSession(existing, null, { resume: true });
-      }
-      return;
     }
-  }
 
-  // New session
-  const session = sessions.create(data, clientUUID);
-  writeHistory(session, 'in', data);
+    if (!session) {
+      session = sessions.create(data, clientUUID);
+    }
 
-  // Generate JWTs
-  const { chatJwt, mobileJwt } = makeSessionJWTs(session.sessionId, config.centrifugo.hmacSecret);
-  session.chatJwt = chatJwt;
-  session.mobileJwt = mobileJwt;
+    writeHistory(session, 'in', data);
 
-  // Subscribe the chat client to session channel (for hello_ack delivery)
-  try {
-    await centrifugo.apiSubscribe('lobby-user', clientUUID, session.channel);
+    // Subscribe router to room:<sessionId> BEFORE ack (инвариант #2)
+    try {
+      await centrifugo.apiSubscribe('router-1', centrifugo.clientId, session.channel);
+    } catch (err) {
+      throw { type: 'subscribe_failed', message: err.message };
+    }
+
+    // Generate JWTs (room: namespace)
+    const { roomJwt, mobileJwt } = makeRoomJWTs(session.sessionId, config.centrifugo.hmacSecret);
+    session.chatJwt = roomJwt;
+    if (!isReconnect) session.mobileJwt = mobileJwt;
+
+    session.status = isReconnect ? (session.userId ? 'active' : 'awaiting_auth') : 'awaiting_auth';
+
+    // Generate QR code
+    let qrSvg = '';
+    if (!isReconnect && mobileJwt) {
+      try { qrSvg = await generateQR(mobileJwt); } catch {}
+    }
+
+    const helloAck = {
+      type: 'hello_ack',
+      session_id: session.sessionId,
+      status: isReconnect ? 'reconnected' : 'awaiting_auth',
+      room_jwt: roomJwt,
+      ...(isReconnect ? {} : { mobile_jwt: mobileJwt, qr_svg: qrSvg }),
+    };
+
+    // Publish ack to BOOTSTRAP channel (not room)
+    await centrifugo.apiPublish(entry.channel, helloAck);
+    writeHistory(session, 'out', helloAck);
+
+    log.info(TAG, `hello_ack sent via bootstrap for session ${session.sessionId} (${isReconnect ? 'reconnected' : 'awaiting_auth'})`);
+
+    // If reconnect and active, respawn Claude
+    if (isReconnect && session.status === 'active' && !session.claudeProcess && !session.adapter) {
+      spawnClaudeForSession(session, null, { resume: true });
+    }
   } catch (err) {
-    log.error(TAG, `Failed to subscribe client to session channel: ${err.message}`);
+    const reason = err?.type === 'subscribe_failed' ? 'subscribe_failed' : 'internal_error';
+    try {
+      await centrifugo.apiPublish(entry.channel, { type: 'hello_error', reason });
+    } catch {}
+    log.error(TAG, `hello_error for ${bootstrapClientId}: ${err.message || err}`);
+  } finally {
+    cleanupBootstrap(bootstrapClientId);
   }
-
-  // Subscribe Router to session channel via Server API
-  try {
-    await centrifugo.apiSubscribe('router-1', centrifugo.clientId, session.channel);
-  } catch (err) {
-    log.error(TAG, `Failed to subscribe router to ${session.channel}: ${err.message}`);
-  }
-
-  // Session awaits mobile auth (QR scan)
-  session.status = 'awaiting_auth';
-
-  // Generate QR code from mobile_jwt (server-side SVG, no external dependencies)
-  let qrSvg = '';
-  try {
-    qrSvg = await generateQR(mobileJwt);
-  } catch (err) {
-    log.error(TAG, `QR generation failed: ${err.message}`);
-  }
-
-  // Publish hello_ack with mobile_jwt + QR SVG
-  const helloAck = {
-    type: 'hello_ack',
-    session_id: session.sessionId,
-    status: 'new',
-    chat_jwt: chatJwt,
-    mobile_jwt: mobileJwt,
-    qr_svg: qrSvg,
-  };
-  await centrifugo.apiPublish(session.channel, helloAck);
-  writeHistory(session, 'out', helloAck);
-
-  log.info(TAG, `hello_ack sent for session ${session.sessionId} (awaiting mobile auth)`);
 }
 
 // --- Chat ---
@@ -369,9 +448,16 @@ async function handleAuth(session, data) {
   log.info(TAG, `auth: session=${session.sessionId}, user=${user_id}`);
 
   const authResult = verifyAuth(user_id, device_id);
+  if (!authResult.ok) {
+    const ack = { type: 'auth_ack', session_id: session.sessionId, status: 'auth_failed' };
+    await centrifugo.apiPublish(session.channel, ack);
+    writeHistory(session, 'out', ack);
+    return;
+  }
+
   const balanceResult = checkBalance(user_id);
 
-  if (authResult.ok && balanceResult.ok) {
+  if (balanceResult.ok) {
     session.status = 'active';
     session.userId = user_id;
 
@@ -425,7 +511,7 @@ async function handleAuth(session, data) {
     const ack = {
       type: 'auth_ack',
       session_id: session.sessionId,
-      status: authResult.ok ? 'insufficient_balance' : 'auth_failed',
+      status: 'insufficient_balance',
     };
     await centrifugo.apiPublish(session.channel, ack);
     writeHistory(session, 'out', ack);
@@ -494,96 +580,77 @@ function handleDisconnect(session) {
   // Не удаляем сессию — клиент может переподключиться по form_id (TTL 30 мин)
 }
 
-// --- Mobile registration ---
+// --- Mobile registration (by device_id) ---
 
-const REG_TTL = 5 * 60 * 1000; // 5 minutes
-const REG_MAX_ATTEMPTS = 3;
-
-async function handleMobileRegister(data, clientUUID) {
-  const { phone, device_id } = data;
-  log.info(TAG, `mobile register: phone=${phone}, device_id=${device_id}`);
-
-  if (!phone) {
-    log.warn(TAG, 'register: missing phone');
+async function handleRegisterBootstrap(bootstrapClientId, data, clientUUID) {
+  const entry = pendingBootstraps.get(bootstrapClientId);
+  if (!entry) return;
+  if (entry.state !== 'waiting_message') {
+    log.info(TAG, `Duplicate register ignored for bootstrap ${bootstrapClientId}`);
     return;
   }
+  entry.state = 'acked';
 
-  const regId = randomUUID();
-  const code = String(Math.floor(1000 + Math.random() * 9000)); // 4-digit code
+  const { device_id } = data;
+  log.info(TAG, `register from bootstrap ${entry.channel}, device_id=${device_id}`);
 
-  _pendingRegistrations.set(regId, {
-    phone,
-    deviceId: device_id || null,
-    code,
-    clientUUID,
-    attempts: 0,
-    created: Date.now(),
-  });
-
-  log.info(TAG, `📱 REGISTRATION CODE for ${phone}: ${code} (reg_id=${regId})`);
-
-  // Send sms_sent to mobile:lobby — client is subscribed via channels claim in JWT
-  await centrifugo.apiPublish('mobile:lobby', { type: 'sms_sent', reg_id: regId, phone });
-}
-
-async function handleMobileConfirm(data, clientUUID) {
-  const { reg_id, code } = data;
-  log.info(TAG, `mobile confirm: reg_id=${reg_id}, code=${code}`);
-
-  const reg = _pendingRegistrations.get(reg_id);
-
-  // Not found or expired
-  if (!reg || (Date.now() - reg.created > REG_TTL)) {
-    if (reg) _pendingRegistrations.delete(reg_id);
-    await centrifugo.apiPublish('mobile:lobby', { type: 'confirm_error', reg_id, reason: 'expired' });
-    return;
-  }
-
-  // Wrong code
-  if (reg.code !== code) {
-    reg.attempts++;
-    if (reg.attempts >= REG_MAX_ATTEMPTS) {
-      _pendingRegistrations.delete(reg_id);
-      await centrifugo.apiPublish('mobile:lobby', { type: 'confirm_error', reg_id, reason: 'max_attempts' });
-      return;
+  try {
+    if (!device_id) {
+      throw { type: 'missing_device_id' };
     }
-    await centrifugo.apiPublish('mobile:lobby', {
-      type: 'confirm_error',
-      reg_id,
-      reason: 'invalid_code',
-      attempts_remaining: REG_MAX_ATTEMPTS - reg.attempts,
-    });
+
+    const result = registerByDeviceId(device_id);
+    if (!result.ok) {
+      throw { type: 'internal_error', message: result.reason };
+    }
+
+    // Subscribe router to user:<userId> BEFORE ack (инвариант #2)
+    try {
+      await centrifugo.apiSubscribe('router-1', centrifugo.clientId, `user:${result.userId}`);
+    } catch (err) {
+      throw { type: 'subscribe_failed', message: err.message };
+    }
+
+    const userJwt = makeUserJWT(result.userId, config.centrifugo.hmacSecret);
+    const balanceResult = checkBalance(result.userId);
+
+    const registerAck = {
+      type: 'register_ack',
+      status: 'ok',
+      user_id: result.userId,
+      user_jwt: userJwt,
+      balance: balanceResult.balance,
+      currency: 'руб',
+    };
+
+    // Publish ack в bootstrap-канал (клиент на raw WebSocket JSON — получит)
+    await centrifugo.apiPublish(entry.channel, registerAck);
+    log.info(TAG, `📱 register_ack sent via bootstrap for user ${result.userId} (new=${result.isNew})`);
+  } catch (err) {
+    const reason = err?.type || 'internal_error';
+    try {
+      await centrifugo.apiPublish(entry.channel, { type: 'register_error', reason });
+    } catch {}
+    log.error(TAG, `register_error for ${bootstrapClientId}: ${reason}`);
+  } finally {
+    cleanupBootstrap(bootstrapClientId);
+  }
+}
+
+// --- Get sessions via user channel (userId from channel name, device_id in payload) ---
+
+async function handleGetSessionsUser(userId, data) {
+  const { device_id } = data;
+  log.info(TAG, `get_sessions (user channel): user=${userId}`);
+
+  if (!device_id) {
+    await centrifugo.apiPublish(`user:${userId}`, { type: 'error', reason: 'missing_device_id' });
     return;
   }
 
-  // Code matches — register user
-  const existingUserId = _phoneToUser.get(reg.phone);
-  const userId = existingUserId || randomUUID();
-
-  // Register in users.mjs (creates user if not exists)
-  verifyAuth(userId, reg.deviceId);
-
-  // Save phone in user profile
-  saveUserSettings(userId, { phone: reg.phone }, null);
-
-  // Update phone→user mapping
-  _phoneToUser.set(reg.phone, userId);
-
-  // Publish success
-  await centrifugo.apiPublish('mobile:lobby', { type: 'register_ack', reg_id, status: 'ok', user_id: userId });
-  _pendingRegistrations.delete(reg_id);
-
-  log.info(TAG, `📱 Registration complete: phone=${reg.phone}, user_id=${userId}`);
-}
-
-// --- Get sessions (mobile) ---
-
-async function handleGetSessions(data, clientUUID) {
-  const { user_id } = data;
-  log.info(TAG, `get_sessions: user_id=${user_id}`);
-
-  if (!user_id) {
-    log.warn(TAG, 'get_sessions: missing user_id');
+  const auth = verifyAuth(userId, device_id);
+  if (!auth.ok) {
+    await centrifugo.apiPublish(`user:${userId}`, { type: 'error', reason: auth.reason });
     return;
   }
 
@@ -591,38 +658,28 @@ async function handleGetSessions(data, clientUUID) {
   const activeStatuses = new Set(['active', 'insufficient_balance', 'disconnected']);
 
   const list = allSessions
-    .filter(s => s.userId === user_id && activeStatuses.has(s.status))
+    .filter(s => s.userId === userId && activeStatuses.has(s.status))
     .map(s => ({
       session_id: s.sessionId,
       channel: s.channel,
       config_name: s.configName,
       config_version: s.configVersion,
       status: s.status,
-      balance: checkBalance(user_id).balance,
+      balance: checkBalance(userId).balance,
       created: new Date(s.created).toISOString(),
       last_activity: new Date(s.lastActivity).toISOString(),
       mobile_jwt: s.mobileJwt || null,
     }));
 
-  await centrifugo.apiPublish('mobile:lobby', {
+  const balanceResult = checkBalance(userId);
+  await centrifugo.apiPublish(`user:${userId}`, {
     type: 'sessions_list',
-    user_id,
     sessions: list,
+    balance: balanceResult.balance,
+    currency: 'руб',
   });
-  log.info(TAG, `sessions_list sent: ${list.length} sessions for user ${user_id}`);
+  log.info(TAG, `sessions_list sent (user channel): ${list.length} sessions for user ${userId}`);
 }
-
-// --- Cleanup expired registrations (every 60s) ---
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [regId, reg] of _pendingRegistrations) {
-    if (now - reg.created > REG_TTL) {
-      _pendingRegistrations.delete(regId);
-      log.info(TAG, `Expired registration removed: reg_id=${regId}, phone=${reg.phone}`);
-    }
-  }
-}, 60 * 1000);
 
 // --- Adapter-based session ---
 

@@ -4,30 +4,14 @@ sealed class OutgoingMessage {
 }
 
 class RegisterMessage extends OutgoingMessage {
-  final String phone;
   final String deviceId;
 
-  RegisterMessage({required this.phone, required this.deviceId});
+  RegisterMessage({required this.deviceId});
 
   @override
   Map<String, dynamic> toJson() => {
         'type': 'register',
-        'phone': phone,
         'device_id': deviceId,
-      };
-}
-
-class ConfirmMessage extends OutgoingMessage {
-  final String regId;
-  final String code;
-
-  ConfirmMessage({required this.regId, required this.code});
-
-  @override
-  Map<String, dynamic> toJson() => {
-        'type': 'confirm',
-        'reg_id': regId,
-        'code': code,
       };
 }
 
@@ -75,49 +59,56 @@ class GetSessionsMessage extends OutgoingMessage {
       };
 }
 
+/// get_sessions через user-канал (userId из канала, только device_id в payload)
+class GetSessionsUserMessage extends OutgoingMessage {
+  final String deviceId;
+
+  GetSessionsUserMessage({required this.deviceId});
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': 'get_sessions',
+        'device_id': deviceId,
+      };
+}
+
 /// Типы входящих сообщений.
 sealed class IncomingMessage {
   factory IncomingMessage.fromJson(Map<String, dynamic> json) {
     final type = json['type'] as String?;
     return switch (type) {
-      'sms_sent' => SmsSentMessage.fromJson(json),
       'register_ack' => RegisterAckMessage.fromJson(json),
       'register_error' => RegisterErrorMessage.fromJson(json),
-      'confirm_error' => ConfirmErrorMessage.fromJson(json),
+      'hello_error' => HelloErrorMessage.fromJson(json),
       'hello_ack' => HelloAckMessage.fromJson(json),
       'auth_ack' => AuthAckMessage.fromJson(json),
       'balance_update' => BalanceUpdateMessage.fromJson(json),
       'sessions_list' => SessionsListMessage(
         userId: json['user_id'] as String?,
         sessions: List<Map<String, dynamic>>.from(json['sessions'] ?? []),
+        balance: (json['balance'] as num?)?.toDouble(),
       ),
       _ => UnknownMessage(type: type, data: json),
     };
   }
 }
 
-class SmsSentMessage implements IncomingMessage {
-  final String regId;
-  final String? phone;
-
-  SmsSentMessage({required this.regId, this.phone});
-
-  factory SmsSentMessage.fromJson(Map<String, dynamic> json) =>
-      SmsSentMessage(regId: json['reg_id'] as String, phone: json['phone'] as String?);
-}
-
 class RegisterAckMessage implements IncomingMessage {
-  final String? regId;
   final String status;
   final String? userId;
+  final double? balance;
+  final String? userJwt;
+  final String? targetClient;
 
-  RegisterAckMessage({this.regId, required this.status, this.userId});
+  RegisterAckMessage({required this.status, this.userId, this.balance, this.userJwt, this.targetClient});
 
   factory RegisterAckMessage.fromJson(Map<String, dynamic> json) =>
       RegisterAckMessage(
-        regId: json['reg_id'] as String?,
         status: json['status'] as String? ?? 'ok',
         userId: json['user_id'] as String?,
+        balance: (json['balance'] as num?)?.toDouble(),
+        userJwt: json['user_jwt'] as String?,
+        targetClient: json['target_client'] as String?,
       );
 }
 
@@ -131,21 +122,6 @@ class RegisterErrorMessage implements IncomingMessage {
       RegisterErrorMessage(
         reason: json['reason'] as String,
         retryAfter: json['retry_after'] as int?,
-      );
-}
-
-class ConfirmErrorMessage implements IncomingMessage {
-  final String? regId;
-  final String reason;
-  final int? attemptsLeft;
-
-  ConfirmErrorMessage({this.regId, required this.reason, this.attemptsLeft});
-
-  factory ConfirmErrorMessage.fromJson(Map<String, dynamic> json) =>
-      ConfirmErrorMessage(
-        regId: json['reg_id'] as String?,
-        reason: json['reason'] as String,
-        attemptsLeft: (json['attempts_remaining'] ?? json['attempts_left']) as int?,
       );
 }
 
@@ -221,7 +197,17 @@ class BalanceUpdateMessage implements IncomingMessage {
 class SessionsListMessage implements IncomingMessage {
   final String? userId;
   final List<Map<String, dynamic>> sessions;
-  SessionsListMessage({this.userId, required this.sessions});
+  final double? balance;
+  SessionsListMessage({this.userId, required this.sessions, this.balance});
+}
+
+class HelloErrorMessage implements IncomingMessage {
+  final String reason;
+
+  HelloErrorMessage({required this.reason});
+
+  factory HelloErrorMessage.fromJson(Map<String, dynamic> json) =>
+      HelloErrorMessage(reason: json['reason'] as String? ?? 'unknown');
 }
 
 class UnknownMessage implements IncomingMessage {

@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../app/theme.dart';
-import '../core/push_service.dart';
+import '../core/centrifugo/centrifugo_client.dart';
 import '../core/storage/secure_storage.dart';
-import '../features/registration/registration_screen.dart';
+import '../features/registration/registration_provider.dart';
 import '../features/home/home_screen.dart';
 import '../features/scanner/scanner_screen.dart';
 import '../features/session/session_screen.dart';
@@ -16,7 +16,6 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/',
     routes: [
       GoRoute(path: '/', builder: (_, __) => const SplashScreen()),
-      GoRoute(path: '/registration', builder: (_, __) => const RegistrationScreen()),
       GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
       GoRoute(path: '/scanner', builder: (_, __) => const ScannerScreen()),
       GoRoute(
@@ -43,26 +42,56 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _checkAuth() async {
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 1));
     if (!mounted) return;
-
-    // Инициализация push-уведомлений
-    final pushService = ref.read(pushServiceProvider);
-    await pushService.initialize();
 
     final storage = ref.read(secureStorageProvider);
-    var userId = await storage.getUserId();
+    final userId = await storage.getUserId();
+    final userJwt = await storage.getUserJwt();
     if (!mounted) return;
 
-    if (userId == null) {
-      // Авто-регистрация: device_id = user_id
-      final deviceId = await storage.getOrCreateDeviceId();
-      await storage.saveUserId(deviceId);
-      // MDM-регистрация (register в mobile:lobby) произойдёт при первом
-      // подключении к Centrifugo — отложенная, не блокирует запуск.
+    if (userId != null && userJwt != null) {
+      // Есть credentials — пробуем подключиться к user-каналу
+      try {
+        final centrifugo = ref.read(accountClientProvider);
+        await centrifugo.connectToUserChannel(userJwt);
+        if (mounted) context.go('/home');
+      } catch (_) {
+        // JWT невалиден — очистить auth, пройти bootstrap
+        await storage.clearAuth();
+        if (mounted) _runRegistration();
+      }
+      return;
     }
 
-    context.go('/home');
+    if (userId != null && userJwt == null) {
+      // Старый пользователь без user_jwt — bootstrap для получения jwt
+      _runRegistration();
+      return;
+    }
+
+    // Нет credentials — регистрация
+    _runRegistration();
+  }
+
+  void _runRegistration() {
+    final notifier = ref.read(registrationProvider.notifier);
+    ref.listenManual<RegistrationState>(registrationProvider, (prev, next) {
+      if (!mounted) return;
+      if (next.step == RegistrationStep.done) {
+        context.go('/home');
+      }
+      if (next.step == RegistrationStep.error) {
+        // Retry только для recoverable ошибок (не missing_device_id)
+        final msg = next.errorMessage ?? '';
+        if (!msg.contains('устройства')) {
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted) notifier.register();
+          });
+        }
+      }
+    });
+    notifier.register();
   }
 
   @override

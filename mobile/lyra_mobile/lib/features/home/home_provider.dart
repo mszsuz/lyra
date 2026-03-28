@@ -38,26 +38,37 @@ class HomeNotifier extends StateNotifier<HomeState> {
 
   HomeNotifier(this._centrifugo, this._storage) : super(const HomeState());
 
+  /// Загрузка сессий через user-канал (не lobby).
+  /// accountClient уже подключён к user:<userId> из splash.
   Future<void> loadSessions() async {
     final userId = await _storage.getUserId();
+    final deviceId = await _storage.getOrCreateDeviceId();
     if (userId == null || userId.isEmpty) return;
 
     state = state.copyWith(loading: true, error: null);
 
-    try {
-      await _centrifugo.connectToLobby();
-    } on TimeoutException {
-      state = state.copyWith(loading: false, error: 'Нет связи с сервером');
-      return;
-    } catch (e) {
-      state = state.copyWith(loading: false, error: 'Ошибка подключения');
-      return;
+    // Если accountClient не подключён — подключиться через user_jwt
+    if (_centrifugo.currentState != CentrifugoConnectionState.connected) {
+      final userJwt = await _storage.getUserJwt();
+      if (userJwt == null) {
+        state = state.copyWith(loading: false, error: 'Нет авторизации');
+        return;
+      }
+      try {
+        await _centrifugo.connectToUserChannel(userJwt);
+      } on TimeoutException {
+        state = state.copyWith(loading: false, error: 'Нет связи с сервером');
+        return;
+      } catch (e) {
+        state = state.copyWith(loading: false, error: 'Ошибка подключения');
+        return;
+      }
     }
 
     // Listen for sessions_list response
     final completer = Completer<List<SessionInfo>>();
     _sub = _centrifugo.messages.listen((message) {
-      if (message is SessionsListMessage && message.userId == userId) {
+      if (message is SessionsListMessage) {
         final sessions = message.sessions
             .map((s) => SessionInfo.fromJson(s))
             .toList();
@@ -65,10 +76,10 @@ class HomeNotifier extends StateNotifier<HomeState> {
       }
     });
 
-    // Send request
+    // Send request через user-канал (userId из канала, device_id в payload)
     await _centrifugo.publish(
-      'mobile:lobby',
-      GetSessionsMessage(userId: userId),
+      'user:$userId',
+      GetSessionsUserMessage(deviceId: deviceId),
     );
 
     // Wait for response with timeout
@@ -83,24 +94,21 @@ class HomeNotifier extends StateNotifier<HomeState> {
     } finally {
       _sub?.cancel();
       _sub = null;
-      await _centrifugo.disconnect();
+      // НЕ отключаемся — accountClient остаётся на user-канале
     }
   }
 
-  /// Синхронизирует local storage с ответом Роутера:
-  /// удаляет мёртвые сессии, обновляет живые.
+  /// Синхронизирует local storage с ответом Роутера.
   Future<void> _syncStorage(List<SessionInfo> serverSessions) async {
     final liveIds = serverSessions.map((s) => s.sessionId).toSet();
     final local = await _storage.getSessions();
 
-    // Удалить из storage сессии, которых нет на сервере
     for (final s in local) {
       if (!liveIds.contains(s.sessionId)) {
         await _storage.removeSession(s.sessionId);
       }
     }
 
-    // Обновить/добавить живые сессии
     for (final s in serverSessions) {
       await _storage.saveSession(s);
     }
@@ -114,7 +122,7 @@ class HomeNotifier extends StateNotifier<HomeState> {
 }
 
 final homeProvider = StateNotifierProvider<HomeNotifier, HomeState>((ref) {
-  final centrifugo = ref.watch(centrifugoClientProvider);
+  final centrifugo = ref.watch(accountClientProvider);
   final storage = ref.watch(secureStorageProvider);
   return HomeNotifier(centrifugo, storage);
 });

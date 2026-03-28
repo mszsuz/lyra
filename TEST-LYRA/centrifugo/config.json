@@ -28,10 +28,27 @@
         "allow_subscribe_for_client": false,
         "allow_publish_for_client": true,
         "presence": true,
-        "join_leave": true
+        "join_leave": true,
+        "force_push_join_leave": true
       },
       {
         "name": "mobile",
+        "allow_subscribe_for_client": false,
+        "allow_publish_for_client": true,
+        "presence": true,
+        "join_leave": true,
+        "force_push_join_leave": true
+      },
+      {
+        "name": "room",
+        "allow_subscribe_for_client": false,
+        "allow_publish_for_client": true,
+        "presence": true,
+        "join_leave": true,
+        "force_push_join_leave": true
+      },
+      {
+        "name": "user",
         "allow_subscribe_for_client": false,
         "allow_publish_for_client": true
       },

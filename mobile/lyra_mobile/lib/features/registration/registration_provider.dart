@@ -7,42 +7,29 @@ import '../../core/centrifugo/message_types.dart';
 import '../../core/storage/secure_storage.dart';
 
 enum RegistrationStep {
-  phoneInput,
-  waitingSms,
-  codeInput,
-  confirming,
+  connecting,
+  waitingBootstrap,
+  registering,
   done,
   error,
 }
 
 class RegistrationState {
   final RegistrationStep step;
-  final String? regId;
   final String? errorMessage;
-  final int? retryAfter;
-  final int? attemptsLeft;
 
   const RegistrationState({
-    this.step = RegistrationStep.phoneInput,
-    this.regId,
+    this.step = RegistrationStep.connecting,
     this.errorMessage,
-    this.retryAfter,
-    this.attemptsLeft,
   });
 
   RegistrationState copyWith({
     RegistrationStep? step,
-    String? regId,
     String? errorMessage,
-    int? retryAfter,
-    int? attemptsLeft,
   }) {
     return RegistrationState(
       step: step ?? this.step,
-      regId: regId ?? this.regId,
       errorMessage: errorMessage,
-      retryAfter: retryAfter,
-      attemptsLeft: attemptsLeft,
     );
   }
 }
@@ -51,24 +38,24 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
   final CentrifugoClient _centrifugo;
   final SecureStorage _storage;
   StreamSubscription<IncomingMessage>? _messagesSub;
-  String _pendingPhone = '';
 
   RegistrationNotifier(this._centrifugo, this._storage)
-      : super(const RegistrationState()) {
-    _messagesSub = _centrifugo.messages.listen(_onMessage);
-  }
+      : super(const RegistrationState());
 
-  Future<void> sendPhone(String phone) async {
-    _pendingPhone = phone;
-    state = state.copyWith(step: RegistrationStep.waitingSms);
+  /// Регистрация через bootstrap-канал (centrifuge-dart protobuf).
+  Future<void> register() async {
+    state = state.copyWith(step: RegistrationStep.connecting);
+
+    // Подписываемся на serverSubscriptions ДО connect
+    final bootstrapFuture = _centrifugo.serverSubscriptions
+        .where((ch) => ch.startsWith('mobile:') && ch != 'mobile:lobby')
+        .first
+        .timeout(const Duration(seconds: 15));
 
     try {
       await _centrifugo.connectToLobby();
     } on StateError catch (e) {
-      state = state.copyWith(
-        step: RegistrationStep.error,
-        errorMessage: e.message,
-      );
+      state = state.copyWith(step: RegistrationStep.error, errorMessage: e.message);
       return;
     } on TimeoutException {
       state = state.copyWith(
@@ -77,46 +64,42 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
       );
       return;
     } catch (e) {
+      state = state.copyWith(step: RegistrationStep.error, errorMessage: 'Ошибка подключения: $e');
+      return;
+    }
+
+    // Ждём bootstrap-канал от роутера (push.subscribe)
+    state = state.copyWith(step: RegistrationStep.waitingBootstrap);
+
+    String bootstrapChannel;
+    try {
+      bootstrapChannel = await bootstrapFuture;
+    } on TimeoutException {
       state = state.copyWith(
         step: RegistrationStep.error,
-        errorMessage: 'Ошибка подключения: $e',
+        errorMessage: 'Сервер не назначил канал. Попробуйте позже.',
       );
       return;
     }
 
+    // Регистрация через bootstrap-канал
+    state = state.copyWith(step: RegistrationStep.registering);
+    _messagesSub?.cancel();
+    _messagesSub = _centrifugo.messages.listen(_onMessage);
+
     final deviceId = await _storage.getOrCreateDeviceId();
     await _centrifugo.publish(
-      'mobile:lobby',
-      RegisterMessage(phone: phone, deviceId: deviceId),
-    );
-    await _storage.savePhone(phone);
-  }
-
-  Future<void> confirmCode(String code) async {
-    if (state.regId == null) return;
-
-    state = state.copyWith(step: RegistrationStep.confirming);
-    await _centrifugo.publish(
-      'mobile:lobby',
-      ConfirmMessage(regId: state.regId!, code: code),
+      bootstrapChannel,
+      RegisterMessage(deviceId: deviceId),
     );
   }
 
   void _onMessage(IncomingMessage message) {
     switch (message) {
-      case SmsSentMessage(:final regId, :final phone):
-        // Filter: only accept sms_sent for our phone number
-        if (phone != null && phone != _pendingPhone) break;
-        state = state.copyWith(
-          step: RegistrationStep.codeInput,
-          regId: regId,
-        );
-
-      case RegisterAckMessage(:final regId, :final status, :final userId):
-        // Filter: only accept register_ack for our reg_id
-        if (regId != null && regId != state.regId) break;
+      case RegisterAckMessage(:final status, :final userId, :final userJwt):
         if (status == 'ok' && userId != null) {
           _storage.saveUserId(userId);
+          if (userJwt != null) _storage.saveUserJwt(userJwt);
           _centrifugo.disconnect();
           state = state.copyWith(step: RegistrationStep.done);
         } else {
@@ -126,20 +109,10 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
           );
         }
 
-      case RegisterErrorMessage(:final reason, :final retryAfter):
+      case RegisterErrorMessage(:final reason):
         state = state.copyWith(
           step: RegistrationStep.error,
           errorMessage: _errorText(reason),
-          retryAfter: retryAfter,
-        );
-
-      case ConfirmErrorMessage(:final regId, :final reason, :final attemptsLeft):
-        // Filter: only accept confirm_error for our reg_id
-        if (regId != null && regId != state.regId) break;
-        state = state.copyWith(
-          step: RegistrationStep.codeInput,
-          errorMessage: _errorText(reason),
-          attemptsLeft: attemptsLeft,
         );
 
       default:
@@ -149,10 +122,9 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
 
   String _errorText(String reason) {
     return switch (reason) {
-      'rate_limited' => 'Слишком часто. Подождите и попробуйте снова.',
-      'invalid_code' => 'Неверный код.',
-      'expired' => 'Код истёк. Запросите новый.',
-      'max_attempts' => 'Превышено число попыток.',
+      'missing_device_id' => 'Ошибка устройства.',
+      'subscribe_failed' => 'Ошибка сервера. Попробуйте позже.',
+      'internal_error' => 'Внутренняя ошибка. Попробуйте позже.',
       _ => reason,
     };
   }
@@ -166,7 +138,7 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
 
 final registrationProvider =
     StateNotifierProvider<RegistrationNotifier, RegistrationState>((ref) {
-  final centrifugo = ref.watch(centrifugoClientProvider);
+  final centrifugo = ref.watch(accountClientProvider);
   final storage = ref.watch(secureStorageProvider);
   return RegistrationNotifier(centrifugo, storage);
 });

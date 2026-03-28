@@ -165,7 +165,7 @@ class ScannerNotifier extends StateNotifier<ScannerState> {
 
           final session = SessionInfo(
             sessionId: sessionId,
-            channel: 'session:$sessionId',
+            channel: 'room:$sessionId',
             mobileJwt: _currentMobileJwt,
             configName: cn,
             status: 'connected',

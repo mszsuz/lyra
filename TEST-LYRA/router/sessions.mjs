@@ -21,7 +21,7 @@ export class SessionManager {
     const session = {
       sessionId,
       formId: hello.form_id || null,
-      channel: `session:${sessionId}`,
+      channel: `room:${sessionId}`,
       configName: hello.config_name || hello.config || hello.configuration || '',
       configVersion: hello.config_version || hello.version || '',
       configId: hello.config_id || '',
@@ -86,8 +86,8 @@ export class SessionManager {
   }
 
   getByChannel(channel) {
-    // channel = "session:<sessionId>"
-    const sessionId = channel.replace('session:', '');
+    // channel = "room:<sessionId>"
+    const sessionId = channel.replace('room:', '');
     return this.get(sessionId);
   }
 

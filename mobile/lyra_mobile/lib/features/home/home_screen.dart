@@ -78,7 +78,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               Center(
                 child: Text(
-                  'v0.3.1',
+                  'v0.4.25',
                   style: TextStyle(
                     color: LyraTheme.textSecondary.withValues(alpha: 0.5),
                     fontSize: 11,
@@ -108,11 +108,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _buildIconButton(
           icon: Icons.person_outline,
           onTap: () => context.go('/profile'),
-        ),
-        const SizedBox(width: 8),
-        _buildIconButton(
-          icon: Icons.close,
-          onTap: () => _showLogoutDialog(context),
         ),
       ],
     );
@@ -235,30 +230,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildScanButton(BuildContext context) {
+    final balance = ref.watch(balanceProvider);
+    final enabled = balance > 0;
+
     return GestureDetector(
-      onTap: () => context.go('/scanner'),
-      child: Container(
-        width: double.infinity,
-        height: 60,
-        decoration: BoxDecoration(
-          color: LyraTheme.accent,
-          borderRadius: BorderRadius.circular(LyraTheme.radius),
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.camera_alt, color: Colors.white, size: 22),
-            SizedBox(width: 10),
-            Text(
-              'ПОДКЛЮЧИТЬСЯ К 1С',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1,
+      onTap: enabled
+          ? () => context.go('/scanner')
+          : () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Пополните баланс для подключения')),
+              );
+            },
+      child: Opacity(
+        opacity: enabled ? 1.0 : 0.4,
+        child: Container(
+          width: double.infinity,
+          height: 60,
+          decoration: BoxDecoration(
+            color: LyraTheme.accent,
+            borderRadius: BorderRadius.circular(LyraTheme.radius),
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.camera_alt, color: Colors.white, size: 22),
+              SizedBox(width: 10),
+              Text(
+                'ПОДКЛЮЧИТЬСЯ К 1С',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -380,7 +387,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (confirmed == true) {
       await ref.read(secureStorageProvider).clearAll();
       if (context.mounted) {
-        context.go('/registration');
+        context.go('/');
       }
     }
   }

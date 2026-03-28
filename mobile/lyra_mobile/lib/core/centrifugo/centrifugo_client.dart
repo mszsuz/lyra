@@ -20,14 +20,22 @@ class CentrifugoClient {
       StreamController<IncomingMessage>.broadcast();
   final _connectionStateController =
       StreamController<CentrifugoConnectionState>.broadcast();
+  final _serverSubscriptionsController =
+      StreamController<String>.broadcast();
 
   Stream<IncomingMessage> get messages => _messagesController.stream;
   Stream<CentrifugoConnectionState> get connectionState =>
       _connectionStateController.stream;
+  Stream<String> get serverSubscriptions =>
+      _serverSubscriptionsController.stream;
 
   CentrifugoConnectionState _currentState =
       CentrifugoConnectionState.disconnected;
   CentrifugoConnectionState get currentState => _currentState;
+
+  /// Client ID текущего соединения (от Centrifugo, доступен после connect).
+  String? _clientId;
+  String? get clientId => _clientId;
 
   /// Подключение к mobile:lobby с общим JWT.
   /// Throws [StateError] если JWT не настроен.
@@ -64,6 +72,33 @@ class CentrifugoClient {
       await disconnect();
       throw TimeoutException(
         'Не удалось подключиться к серверу. Проверьте сеть.',
+      );
+    }
+  }
+
+  /// Подключение к user:<userId> с персональным user_jwt.
+  Future<void> connectToUserChannel(String userJwt) async {
+    await disconnect();
+
+    final wsUrl = await CentrifugoConfig.getWsUrl();
+    _client = centrifuge.createClient(
+      wsUrl,
+      centrifuge.ClientConfig(token: userJwt),
+    );
+
+    _setupClientHandlers();
+
+    _updateState(CentrifugoConnectionState.connecting);
+    _client!.connect();
+
+    try {
+      await connectionState
+          .firstWhere((s) => s == CentrifugoConnectionState.connected)
+          .timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      await disconnect();
+      throw TimeoutException(
+        'Не удалось подключиться к каналу пользователя.',
       );
     }
   }
@@ -120,33 +155,36 @@ class CentrifugoClient {
     final client = _client!;
 
     client.connected.listen((event) {
-      print('[CentrifugoClient] Connected: ${event.client}');
+      _clientId = event.client;
       _updateState(CentrifugoConnectionState.connected);
     });
 
     client.disconnected.listen((event) {
-      print('[CentrifugoClient] Disconnected: ${event.reason}');
       _updateState(CentrifugoConnectionState.disconnected);
     });
 
     client.connecting.listen((event) {
-      print('[CentrifugoClient] Connecting: ${event.reason}');
       _updateState(CentrifugoConnectionState.connecting);
     });
 
-    client.error.listen((event) {
-      print('[CentrifugoClient] Error: ${event.error}');
-    });
+    client.error.listen((event) {});
 
-    // Server-side subscriptions (авто-подписка через channels claim)
+    // Server-side subscriptions (авто-подписка через channels claim + Server API subscribe)
     client.publication.listen((event) {
       _handlePublication(event.data);
+    });
+
+    // Server-side subscription events (bootstrap-канал от роутера)
+    client.subscribed.listen((event) {
+      _serverSubscriptionsController.add(event.channel);
+      if (event.data.isNotEmpty) {
+        _handlePublication(event.data);
+      }
     });
   }
 
   void _handlePublication(List<int> data) {
     final jsonStr = utf8.decode(data);
-    print('[CentrifugoClient] Raw publication: $jsonStr');
     try {
       // centrifuge-dart отдаёт data одной publication — парсим целиком
       final json = jsonDecode(jsonStr) as Map<String, dynamic>;
@@ -166,11 +204,21 @@ class CentrifugoClient {
     disconnect();
     _messagesController.close();
     _connectionStateController.close();
+    _serverSubscriptionsController.close();
   }
 }
 
-final centrifugoClientProvider = Provider<CentrifugoClient>((ref) {
+/// Account client: user:<userId> канал для account-операций (profile, sessions, email).
+/// Живёт всё время работы приложения.
+final accountClientProvider = Provider<CentrifugoClient>((ref) {
   final client = CentrifugoClient();
   ref.onDispose(() => client.dispose());
   return client;
 });
+
+/// Session client: room:<sessionId> канал для активной сессии.
+/// Создаётся при сканировании QR, может быть null.
+final sessionClientProvider = StateProvider<CentrifugoClient?>((ref) => null);
+
+// Legacy alias — убрать после полной миграции
+final centrifugoClientProvider = accountClientProvider;
