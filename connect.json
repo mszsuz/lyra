@@ -1,4 +1,5 @@
 {
-  "ws": "wss://delivered-manor-happens-diploma.trycloudflare.com/connection/websocket",
-  "version": 1
+  "ws": "wss://lyra.ru.tuna.am/connection/websocket",
+  "ws_fallback": "ws://ru.tuna.am:35773/connection/websocket",
+  "version": 2
 }
