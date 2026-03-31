@@ -1,4 +1,4 @@
 {
-  "ws": "ws://ru.tuna.am:35773/connection/websocket",
+  "ws": "wss://delivered-manor-happens-diploma.trycloudflare.com/connection/websocket",
   "version": 1
 }
