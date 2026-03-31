@@ -70,6 +70,28 @@ class CentrifugoClient {
           .timeout(const Duration(seconds: 15));
     } on TimeoutException {
       await disconnect();
+
+      // Пробуем fallback URL (ws:// для мобильного/тонкого клиента)
+      final fallbackUrl = CentrifugoConfig.switchToFallback();
+      if (fallbackUrl != null) {
+        print('[CentrifugoClient] Trying fallback: $fallbackUrl');
+        _client = centrifuge.createClient(
+          fallbackUrl,
+          centrifuge.ClientConfig(token: jwt),
+        );
+        _setupClientHandlers();
+        _updateState(CentrifugoConnectionState.connecting);
+        _client!.connect();
+        try {
+          await connectionState
+              .firstWhere((s) => s == CentrifugoConnectionState.connected)
+              .timeout(const Duration(seconds: 15));
+          return; // fallback сработал
+        } on TimeoutException {
+          await disconnect();
+        }
+      }
+
       throw TimeoutException(
         'Не удалось подключиться к серверу. Проверьте сеть.',
       );
