@@ -1,0 +1,5 @@
+{
+  "ws": "wss://lyra.1ccc.ru/connection/websocket",
+  "ws_fallback": "ws://185.180.231.228:11911/connection/websocket",
+  "version": 3
+}
