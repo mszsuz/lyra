@@ -1,0 +1,6 @@
+{
+  "ws": "ws://192.168.1.2:11911/connection/websocket",
+  "ws_fallback": "ws://192.168.1.2:11911/connection/websocket",
+  "version": 3,
+  "_note": "DEV config — ws URL points to developer local machine (192.168.1.2). Клиенты dev-сборок читают этот файл вместо connect.json. Local network only — no security risk to publish."
+}
