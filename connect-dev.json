@@ -1,6 +1,6 @@
 {
-  "ws": "ws://10.8.1.1:11911/connection/websocket",
-  "ws_fallback": "ws://10.8.1.1:11911/connection/websocket",
-  "version": 4,
-  "_note": "DEV config — ws URL points to developer VPN interface (10.8.1.1). Клиенты dev-сборок читают этот файл вместо connect.json. Development VPN only — no security risk to publish."
+  "ws": "ws://192.168.1.2:11911/connection/websocket",
+  "ws_fallback": "ws://192.168.1.2:11911/connection/websocket",
+  "version": 5,
+  "_note": "DEV config — ws URL points to the developer LAN address (192.168.1.2). Клиенты dev-сборок читают этот файл вместо connect.json. Development LAN only — no security risk to publish."
 }
